@@ -69,14 +69,14 @@ def _keep(ts):
     return [t.detach().clone() for t in ts]
 
 
-def _leaf(id, name, type, path, ts, vals, frm, src):
-    leaf = {"id": id, "name": name, "type": type, "path": path, "out": tensor(vals[0])}
+def _leaf(id, name, type, path, ts, vals, frm, src, size={}):
+    leaf = {"id": id, "name": name, "type": type, "path": path, "out": tensor(vals[0], **size)}
     if frm is not None:
         leaf["from"] = frm
     if ts[0].grad is not None:
-        leaf["grad"] = tensor(ts[0].grad)
+        leaf["grad"] = tensor(ts[0].grad, **size)
     if len(vals) > 1:
-        leaf["also"] = {str(k): tensor(v) for k, v in enumerate(vals[1:4], 1)}
+        leaf["also"] = {str(k): tensor(v, **size) for k, v in enumerate(vals[1:4], 1)}
     if src:
         leaf["src"] = src
     return leaf
@@ -156,85 +156,105 @@ def _caller():
 
 def _hooks(model, args, kw):
     """Steps are the module calls with no module call inside them, and the tensors that functions computed in between
-    and a module then reads or returns (one step each, named after the last of those functions). Edges are read off
-    the autograd graph."""
+    and a module then reads or returns, or the model itself returns (one step each, named after the last of those
+    functions). Edges are read off the autograd graph. A parameter that forward uses directly is an input."""
     ids = {m: n for n, m in model.named_modules() if n}
-    recs, stack, made, count, version = [], [], {}, {}, []  # made: what produced a tensor -> index of the step that shows it
+    weights = {id(p): n for n, p in model.named_parameters()}
+    recs, stack, made, count = [], [], {}, {}  # made: what produced a tensor -> the step that shows it
 
-    def key(t):  # a tensor autograd did not make (an input, or a view of an integer one) is known by its storage
+    def key(t):  # a tensor autograd did not make (an input, a weight, a view of an integer input) is known by its storage
         return t.grad_fn if t.grad_fn is not None else t.untyped_storage().data_ptr()
 
-    def producers(starts):
-        return [recs[i]["id"] for i in feeding(starts)]
+    def back(t):  # the autograd nodes a tensor was computed from
+        return [g for g, _ in t.next_functions if g is not None]
 
-    def feeding(starts):  # the steps that feed these tensors or autograd nodes, looking back through whatever lies between
-        found, todo, seen = set(), [t.grad_fn if torch.is_tensor(t) and t.grad_fn is not None else t for t in starts], set()
+    def walk(starts):
+        """Back from these tensors or autograd nodes to the nearest steps. Also: the weights met on the way that are no
+        step yet, and every node passed."""
+        found, loose, todo, seen = [], [], [t.grad_fn if torch.is_tensor(t) and t.grad_fn is not None else t for t in starts], set()
         while todo:
             f = todo.pop()
-            if torch.is_tensor(f) or hasattr(f, "variable"):  # AccumulateGrad: a leaf tensor, i.e. an input or a weight
-                f = (f if torch.is_tensor(f) else f.variable).untyped_storage().data_ptr()
+            if torch.is_tensor(f) or hasattr(f, "variable"):  # AccumulateGrad holds a leaf tensor: an input or a weight
+                v = f if torch.is_tensor(f) else f.variable
+                f = v.untyped_storage().data_ptr()
+                if f not in seen and f not in made and id(v) in weights:
+                    loose.append(v)
             if f in seen:
                 continue
             seen.add(f)
             if f in made:
-                found.add(made[f])
+                found.append(made[f])
             elif not isinstance(f, int):
-                todo += [g for g, _ in f.next_functions if g is not None]
-        return sorted(found)
+                todo += back(f)
+        return found, loose, seen
 
-    def add(base, name, typ, path, ts, frm, src, loose=False):
+    def add(base, name, typ, path, ts, frm, src, fn=None, at=None):
         c = count[base] = count.get(base, -1) + 1
-        recs.append(dict(id=base + (f"_{c}" if c else ""), name=name, type=typ, path=path, ts=ts, vals=_keep(ts), frm=frm, src=src, loose=loose))
-        version.append(ts[0]._version)
+        r = dict(id=base + (f"_{c}" if c else ""), name=name, type=typ, path=path, ts=ts, vals=_keep(ts), frm=frm, src=src, fn=fn, ver=ts[0]._version)
+        recs.insert(len(recs) if at is None else at, r)
         for t in ts:
-            made[key(t)] = len(recs) - 1
+            made[key(t)] = r
+        return r
 
-    def between(ts, path):  # tensors no module made: the work of functions since the last module call (a residual +, a softmax)
-        for t in ts:
-            if t.grad_fn is None or t.grad_fn in made:
-                continue
-            src = feeding([g for g, _ in t.grad_fn.next_functions if g is not None])
+    def sources(starts, path):  # the steps these read, in order; a weight used directly becomes an input step on the spot
+        found, loose, _ = walk(starts)
+        found += [add(weights[id(v)].replace(".", "_"), weights[id(v)].split(".")[-1], "Input", path, [v], None, None) for v in loose]
+        return sorted({id(r): r for r in found}.values(), key=recs.index)
+
+    def between(ts, path, since):
+        """Tensors no module made: the work of functions (a residual +, a softmax, a similarity)."""
+        new = list({id(t): t for t in ts if t.grad_fn is not None and t.grad_fn not in made}.values())
+        if len(new) > 1:  # one of them may be computed from another: that one first
+            passed = {id(t): walk(back(t.grad_fn))[2] for t in new}
+            new.sort(key=lambda t: sum(u.grad_fn in passed[id(t)] for u in new))
+        for t in new:
+            src = sources(back(t.grad_fn), path)
             if len(src) == 1:  # the same numbers under another name (a view to the same shape, nothing written since): no step
-                same, look = recs[src[0]]["ts"][0], lambda v: (v.shape, v.stride(), v.storage_offset(), v.untyped_storage().data_ptr())
-                if look(same) == look(t) and t._version == version[src[0]]:
+                same, look = src[0]["ts"][0], lambda v: (v.shape, v.stride(), v.storage_offset(), v.untyped_storage().data_ptr())
+                if look(same) == look(t) and t._version == src[0]["ver"]:
                     made[t.grad_fn] = src[0]
                     continue
+            # steps recorded since this call began may have been computed from this tensor (attention weights that are
+            # only returned): it goes in before the first of them, and they read it instead of looking past it
+            later = [r for r in recs[since:] if r["fn"] is not None and t.grad_fn in walk(back(r["fn"]))[2]]
             op = re.sub(r"Backward\d*$", "", type(t.grad_fn).__name__).lower()
-            add(op, op, op, path, [t], [recs[i]["id"] for i in src], None, True)
+            add(op, op, op, path, [t], [r["id"] for r in src], None, t.grad_fn, recs.index(later[0]) if later else None)
+            for r in later:
+                r["frm"] = [s["id"] for s in sources(back(r["fn"]), r["path"]) if recs.index(s) < recs.index(r)]
 
     def pre(m, a, k):
-        ins = _tensors([a, k])
-        between(ins, [f[3] for f in stack])
+        ins, path = _tensors([a, k]), [f[3] for f in stack]
+        between(ins, path, stack[-1][4] if stack else 0)
         if stack:
             stack[-1][0] = False  # the caller has a module call inside it, so it is not a step itself
         c = count[m] = count.get(m, -1) + 1
-        stack.append([True, producers(ins), _caller(), ids[m] + (f"@{c}" if c else "")])
+        stack.append([True, [r["id"] for r in sources(ins, path)], _caller(), ids[m] + (f"@{c}" if c else ""), len(recs)])
 
     def post(m, a, k, out):
-        innermost, frm, src, call = stack.pop()
+        innermost, frm, src, call, since = stack.pop()
         ts, path = _tensors(out), [f[3] for f in stack]
         if innermost and ts:
             add(ids[m].replace(".", "_"), ids[m].split(".")[-1], type(m).__name__, path, ts, frm, src)
         else:
-            between(ts, [*path, call])
+            between(ts, [*path, call], since)
 
     names = list(kw) or list(inspect.signature(model.forward).parameters)
     for name, t in zip(names, kw.values() if kw else args):
         if torch.is_tensor(t):
             add(name, name, "Input", [], [t], None, None)
-    # ponytail: a parameter that forward uses directly (a position table added by hand) gets no box on this path;
-    # the fx path shows it. Add it here from AccumulateGrad.variable when a hook-traced model needs it.
     hs = [h for m in ids for h in (m.register_forward_pre_hook(pre, with_kwargs=True), m.register_forward_hook(post, with_kwargs=True))]
     try:
         out = model(*args, **kw)
     finally:
         for h in hs:
             h.remove()
-    return recs, producers, out
+    between(_tensors(out), [], 0)
+    return recs, lambda starts: [r["id"] for r in sources(starts, [])], out
 
 
-def trace(model, x, loss_fn=None, target=None, hooks=None):
-    """hooks: None tries torch.fx and falls back to forward hooks, True goes straight to hooks, False is fx or an error."""
+def trace(model, x, loss_fn=None, target=None, hooks=None, **size):
+    """hooks: None tries torch.fx and falls back to forward hooks, True goes straight to hooks, False is fx or an error.
+    size: tensor()'s limits (max_c, max_hw, max_len), for a model with so many steps that the page gets heavy."""
     model.eval()
     for m in model.modules():
         if getattr(m, "inplace", False):
@@ -262,9 +282,13 @@ def trace(model, x, loss_fn=None, target=None, hooks=None):
         loss.backward()
     if hooks:
         last = producers([loss]) if loss is not None else []
-        read = {s for r in recs for s in r["frm"] or []} | set(last)  # a function result nothing reads (a cache the model returns) is no step
-        recs = [r for r in recs if not r.pop("loose") or r["id"] in read]
-    leaves = [_leaf(**r) for r in recs]
+        while True:  # a function result nothing reads (a cache the model returns) is no step
+            read = {s for r in recs for s in r["frm"] or []} | set(last)
+            kept = [r for r in recs if r["fn"] is None or r["id"] in read]
+            if len(kept) == len(recs):
+                break
+            recs = kept
+    leaves = [_leaf(**{k: r[k] for k in ("id", "name", "type", "path", "ts", "vals", "frm", "src")}, size=size) for r in recs]
     raw = {f"{r['id']}.{k}" if k else r["id"]: v for r in recs for k, v in enumerate(r["vals"])}
     model.zero_grad()
     if loss is not None:
@@ -410,9 +434,24 @@ def _demo(out=None):
     assert by["relu"]["from"] == ["x", "a"] and by["b"]["from"] == ["relu"] and by["loss"]["from"] == ["b", "target"], (by["relu"]["from"], by["b"]["from"])
     assert torch.equal(raw["a"], m.a(x)) and torch.equal(raw["b"], m(x)) and all("grad" in by[k] for k in ("x", "a", "relu"))
     assert by["b"]["src"].startswith("fxtrace.py:")
-    by, types, _ = steps(Attn(), seq, hooks=True)  # the same edges, read off the autograd graph
-    assert types == ["Input", "add", "LayerNorm", "MultiheadAttention", "mean", "Linear", "Input", "cross_entropy"], types
-    assert by["ln"]["from"] == ["add"] and by["mean"]["from"] == ["ln", "att"] and by["fc"]["from"] == ["mean"], (by["mean"]["from"], by["fc"]["from"])
+    by, types, _ = steps(Attn(), seq, hooks=True)  # the same steps and edges as fx found, read off the autograd graph
+    assert types == ["Input", "Input", "add", "LayerNorm", "MultiheadAttention", "mean", "Linear", "Input", "cross_entropy"], types
+    assert by["add"]["from"] == ["x", "pos"] and by["mean"]["from"] == ["ln", "att"] and by["fc"]["from"] == ["mean"], (by["add"]["from"], by["mean"]["from"])
+
+    class Scorer(nn.Module):  # things only functions make: weights that are merely returned, the model's own output, a parameter
+        def __init__(self):
+            super().__init__()
+            self.q, self.k, self.out, self.scale = nn.Linear(8, 8), nn.Linear(8, 8), nn.Linear(8, 3), nn.Parameter(torch.ones(()))
+
+        def forward(self, x):
+            w = (self.q(x) @ self.k(x).transpose(1, 2)).softmax(-1)
+            return self.out(w @ x).mean(1) * self.scale, w
+
+    ls, _ = trace(Scorer(), seq, lambda o, t: F.cross_entropy(o[0], t), y, hooks=True)
+    by, order = {n["id"]: n for n in ls}, [n["id"] for n in ls]
+    mix = order[order.index("softmax") + 1]  # w @ x: recorded when `out` read it, before anything had shown w
+    assert order[:4] == ["x", "q", "k", "softmax"] and by["softmax"]["from"] == ["q", "k"] and by[mix]["from"] == ["x", "softmax"], (order, by[mix]["from"])
+    assert by["out"]["from"] == [mix] and by["scale"]["type"] == "Input" and by["mul"]["from"] == ["out", "scale"] and by["loss"]["from"] == ["mul", "target"], order
     print("fxtrace ok: in-place, multi-output, parameters, shared modules, hook fallback")
 
 

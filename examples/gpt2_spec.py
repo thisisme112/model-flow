@@ -25,9 +25,8 @@ assert target.numel() == 1, "the answer has to be a single token"
 words = [tok.decode(t).strip() for t in ids[0]]
 T = len(words)
 
-leaves, raw = trace(model, {"input_ids": ids, "use_cache": False}, lambda out, t: F.cross_entropy(out.logits[:, -1], t), target, hooks=True)
+leaves, raw = trace(model, {"input_ids": ids, "use_cache": False, "output_attentions": True}, lambda out, t: F.cross_entropy(out.logits[:, -1], t), target, hooks=True)
 with torch.no_grad():
-    attn = model(input_ids=ids, output_attentions=True).attentions  # per layer: 12 heads x T x T
     lens = lambda h: model.lm_head(model.transformer.ln_f(h))[0, -1].softmax(-1)  # noqa: E731  what the model would say if it stopped here
 x, body, head, tgt, loss = nest(leaves, model)["children"]
 wte, wpe, add, drop, *blocks, ln_f = body["children"]
@@ -50,15 +49,15 @@ add["note"] = "词元的向量加上它所在位置的向量。从这里开始�
 drop["note"] = PASS
 for k, b in enumerate(blocks):
     ln1, att, add1, ln2, mlp, add2 = b["children"]
-    c_attn, mix, proj, rd = att["children"]
+    c_attn, wts, mix, proj, rd = att["children"]
     c_fc, act, c_proj, md = mlp["children"]
-    w = attn[k][0].mean(0)[-1]  # where the last position looks, averaged over the 12 heads
+    w = raw[wts["id"]][0].mean(0)[-1]  # where the last position looks, averaged over the 12 heads
     ln1["note"] = ln2["note"] = "每个位置的 768 个数各自被调整到均值 0、方差 1 附近，再乘上学到的缩放。"
     c_attn.update(kind="dense", desc="一次线性变换，同时算出每个位置的查询（Q）、键（K）、值（V）。", note="768 个数变成 2304 = 3×768 个：Q、K、V 各占一份。")
-    mix.update(name="注意力", type="softmax(QKᵀ)·V", kind="attn",
-               desc="每个位置拿自己的 Q 去比它和它之前所有位置的 K，算出该看谁（注意力权重），再按权重把那些位置的 V 加起来。12 个头各算一遍，最后拼回 768 个数。",
-               note=f"最后一个位置（“{words[-1]}”）负责猜下一个词。在这一层，它平均把 {w.max():.0%} 的注意力放在第 {int(w.argmax()) + 1} 个词元“{words[int(w.argmax())]}”上，是最多的。",
-               also={"注意力权重：每张小图是一个头，第 i 行是第 i 个位置在看谁": tensor(attn[k], max_c=12)})
+    wts.update(name="注意力权重", type="softmax(QKᵀ)", kind="attn", out=tensor(raw[wts["id"]], max_c=12),
+               desc="每个位置拿自己的 Q 去比它和它之前所有位置的 K，再过 softmax：得到它该看每个位置多少。每张小图是一个头，第 i 行是第 i 个位置在看谁；只能往前看，所以右上半边是空的。",
+               note=f"最后一个位置（“{words[-1]}”）负责猜下一个词。在这一层，它平均把 {w.max():.0%} 的注意力放在第 {int(w.argmax()) + 1} 个词元“{words[int(w.argmax())]}”上，是最多的。")
+    mix.update(name="加权求和", type="权重 · V", kind="attn", desc="按注意力权重把各个位置的 V 加起来，再把 12 个头的结果拼回 768 个数。", note="每个位置重新得到 768 个数：现在里面混进了它前面那些位置的信息。")
     proj.update(kind="dense", desc="一次线性变换。", note="768 个数变成 768 个数。")
     rd["note"] = md["note"] = PASS
     add1["note"] = "残差连接：把注意力算出的结果加回主干。"
@@ -66,7 +65,7 @@ for k, b in enumerate(blocks):
     act.update(desc="激活函数 GELU：和 ReLU 类似，负数基本变成 0，但在 0 附近是平滑过渡。", note=f"这一步之后，有 {(raw[act['id']].abs() < 0.01).float().mean():.0%} 的数接近 0。")
     c_proj.update(kind="dense", desc="全连接层。", note="3072 个数压回 768 个。")
     add2["note"] = "残差连接：把前馈层的结果加回主干。"
-    att.update(name="注意力子层", desc="各个位置互相看：每个位置从它之前的位置收集信息。", note=mix["note"])
+    att.update(name="注意力子层", desc="各个位置互相看：每个位置从它之前的位置收集信息。", note=wts["note"])
     mlp.update(name="前馈子层", desc="各个位置各自加工：两层全连接，中间过一次 GELU。", note="768 → 3072 → 768。")
     b.update(name=f"第 {k + 1} 层", desc="一层 Transformer：先做注意力（各位置互相看），再过前馈层（各位置各自加工），两次的结果都加回主干。",
              note=f"如果在这一层之后就直接输出，模型会猜 {said(lens(raw[add2['id']]))}。")

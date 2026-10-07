@@ -70,6 +70,7 @@ canvas, img { image-rendering: pixelated; display: block; max-width: 100%; heigh
 .card .pick { width: 100%; height: 100%; display: grid; grid-template-rows: 34px 1fr auto; justify-items: center; align-items: center; border: 0; background: none; padding: 0 0 4px; font: 10px/1.2 var(--mono); color: var(--pencil) }
 .card .head { align-self: stretch; justify-self: stretch; display: grid; place-content: center; overflow: hidden; padding: 0 3px; background: var(--k); border-radius: 4px 4px 0 0; font: 600 12px/1.15 var(--serif); color: var(--ink); text-align: center; overflow-wrap: anywhere }
 .card .head small { display: block; font: 400 9.5px/1.25 var(--mono); color: var(--pencil) }
+.card .head.long { font-size: 10px; line-height: 1.1 }
 .card.in .head { background: none }
 .card .exp { position: absolute; right: -9px; top: -9px; width: 20px; height: 20px; border-radius: 50%; padding: 0; display: grid; place-items: center; font: 600 13px/1 var(--mono) }
 .card[data-s=todo] { opacity: .28 }
@@ -193,7 +194,10 @@ const gnorm = n => typeof n.grad === 'number' ? n.grad : n.grad?.data ? Math.hyp
 const shapeStr = t => !t ? '' : t.tokens && !t.shape ? t.tokens.length + ' 项' : (t.full ?? t.shape ?? []).join('×') || '1 个数';
 
 // ---- what is on screen: a group is either open (drawn as a dashed frame) or closed (drawn as one box)
-const maxLevel = Math.max(1, ...groups.map(g => g.depth + 1));
+// the slider position that opens a group. Branches that are single steps open together with the module around them:
+// there is nothing more inside them, so a stop of their own would only add a click.
+const levelOf = g => g.depth + 1 - (g.parallel && !g.children.some(isGroup) ? 1 : 0);
+const maxLevel = Math.max(1, ...groups.map(levelOf));
 let open = new Set([SPEC.root]), step = 0, V = null, G = null, timer = 0, anims = [];
 const rep = n => { let r = n; for (let p = n.parent; p; p = p.parent) if (!open.has(p)) r = p; return r; };
 const shown = n => !n.parent || (open.has(n.parent) && shown(n.parent));
@@ -232,7 +236,7 @@ function miniBars(d, max) {
 function thumb(t) {
   if (!t) return el('span', 'tk', '—');
   if (t.image) { const i = el('img'); i.src = t.image; i.alt = ''; return i; }
-  if (t.tokens) return el('span', 'tk', t.tokens.slice(0, 3).join(' ') + (t.tokens.length > 3 ? ' …' : ''));
+  if (t.tokens) { const few = t.tokens.slice(0, 3).join(' '), fits = few.length <= 24; return el('span', 'tk', fits ? few + (t.tokens.length > 3 ? ' …' : '') : t.tokens[0].slice(0, 22) + ' …'); }
   const d = t.data;
   if (!d) return el('span', 'tk', '…');
   if (d.length === 1) return el('span', 'num', f(d[0]));
@@ -284,7 +288,8 @@ function build() {
   const card = (n, input) => {
     const made = V.data.filter(d => d.prod === n).map(d => d.leaf.out), many = made.length > 1, t = lastLeaf(n).out, multi = many && el('span', 'multi', made.slice(0, 3).map(thumb));
     if (multi) multi.style.zoom = made.length > 2 ? .36 : .5;
-    const pick = el('button', 'pick', el('span', 'head', n.name, input ? null : el('small', '', n.type || '模块')), el('span', 'thumb', multi || thumb(t)), el('span', '', many ? made.length + ' 路输出' : shapeStr(t)));
+    const wide = [...n.name].reduce((w, c) => w + (c.charCodeAt(0) > 255 ? 12 : 6.3), 0) > 76;     // a name that will not fit on one line: smaller, so its two lines and the type still fit
+    const pick = el('button', 'pick', el('span', wide ? 'head long' : 'head', n.name, input ? null : el('small', '', n.type || '模块')), el('span', 'thumb', multi || thumb(t)), el('span', '', many ? made.length + ' 路输出' : shapeStr(t)));
     pick.onclick = () => go(input ? 0 : V.ops.indexOf(n) + 1);
     const c = el('div', 'card' + (input ? ' in' : isGroup(n) ? ' group' : ''), pick);
     c.style.setProperty('--k', `var(--k-${kindOf(n)})`);
@@ -352,35 +357,96 @@ function wire() {
   const rowEnd = (e, o, s) => Math[s < 0 ? 'min' : 'max'](o.cy + (s < 0 ? -o.nt : o.nb), ...boxes.filter(x => x.flow === flowOf(e) && x.t < o.cy && x.b > o.cy).map(x => s < 0 ? x.t - 6 : x.b + 6));
   const hits = (x, y0, y1) => nodes.some(e => { const o = box.get(e); return o.l - 3 < x && x < o.r + 3 && o.t < y1 && o.b > y0; });
   const free = (x0, x1, y) => !nodes.some(e => { const o = box.get(e); return Math.abs(o.cy - y) < 4 && o.l >= x0 && o.r <= x1; });   // no step on this row between x0 and x1
-  const clear = (x0, x1, y) => !nodes.some(e => { const o = box.get(e); return o.l < x1 && o.r > x0 && o.t < y && o.b > y; });         // no step of any row touches the line y from x0 to x1
+  const clear = (x0, x1, y) => !nodes.some(e => { const o = box.get(e); return o.l < x1 && o.r > x0 && o.t - 8 < y && o.b + 8 > y; });   // no step of any row on the line y from x0 to x1, or closer to it than 8px
   let lane = 0;
-  const paths = G.wires.map(w => {
+  G.wires.forEach(w => {                                  // first every arrow by itself: w.pts, the corners it turns at
     const A = box.get(w.a), B = box.get(w.b), ia = nodes.indexOf(w.a), ib = nodes.indexOf(w.b), between = nodes.slice(Math.min(ia, ib) + 1, Math.max(ia, ib));
     if (Math.abs(A.cy - B.cy) >= 4) {                      // another row
       const PA = par(w.a, w.b), PB = par(w.b, w.a), a = PA && rel(PA), b = PB && rel(PB);
       // out: to the right; from inside a set of branches, to its right gutter. In: dropped in from the gap above the row;
       // into a set of branches, down its left gutter.
-      const out = !a ? [[A.r, A.cy], [A.r + 5, A.cy]] : free(A.r, a.r, A.cy) ? [[A.r, A.cy], [a.r - 8, A.cy]] : [[A.r, A.cy], [A.r + 5, A.cy], [A.r + 5, A.cy + A.nb], [a.r - 8, A.cy + A.nb]];
+      const out = !a ? [[A.r, A.cy], [A.r + 10, A.cy]] : free(A.r, a.r, A.cy) ? [[A.r, A.cy], [a.r - 8, A.cy]] : [[A.r, A.cy], [A.r + 10, A.cy], [A.r + 10, A.cy + A.nb], [a.r - 8, A.cy + A.nb]];
       const into = !b ? [[B.cx, B.cy - B.nt], [B.cx, B.t]] : free(b.l, B.l, B.cy) ? [[b.l + 8, B.cy], [B.l, B.cy]] : [[b.l + 8, B.cy - B.nt], [B.cx, B.cy - B.nt], [B.cx, B.t]];
       const [x] = out.at(-1), below = rowEnd(PA || w.a, a || A, 1), y = rowEnd(PB || w.b, b || B, -1);   // y: the gap above the row we are going to
-      if (b && A.cy > b.t && A.cy < b.b && A.r <= b.l && free(A.r, b.l, A.cy)) w.d = rounded([[A.r, A.cy], [b.l + 8, A.cy], ...into]);            // a fork: straight in from the left
-      else if (a && !b && B.cy > a.t && B.cy < a.b && B.l >= a.r && free(a.r, B.l, B.cy)) w.d = rounded([...out, [x, B.cy], [B.l, B.cy]]);        // a join: straight out to the right
+      if (b && A.cy > b.t && A.cy < b.b && A.r <= b.l && free(A.r, b.l, A.cy)) w.pts = [[A.r, A.cy], [b.l + 8, A.cy], ...into];            // a fork: straight in from the left
+      else if (a && !b && B.cy > a.t && B.cy < a.b && B.l >= a.r && free(a.r, B.l, B.cy)) w.pts = [...out, [x, B.cy], [B.l, B.cy]];        // a join: straight out to the right
       else if (B.l - 10 > A.r && clear(A.r, B.l - 10, A.cy) && !hits(B.l - 10, Math.min(A.cy, B.cy), Math.max(A.cy, B.cy)))                         // to the right with nothing between (out of a box, say): one bend
-        w.d = rounded([[A.r, A.cy], [B.l - 10, A.cy], [B.l - 10, B.cy], [B.l, B.cy]]);
+        w.pts = [[A.r, A.cy], [B.l - 10, A.cy], [B.l - 10, B.cy], [B.l, B.cy]];
       else if (y > below + 2 && hits(x, below, y)) {       // rows in between, and something in the way: go round by the right edge
         const edge = rel(flowOf(w.a)).r - 3;
-        w.d = rounded([...out, [x, below], [edge, below], [edge, y], [into[0][0], y], ...into]);
-      } else w.d = rounded([...out, [x, y], [into[0][0], y], ...into]);
-    } else if (!between.length && B.l >= A.r) w.d = `M${A.r},${A.cy}L${B.l},${B.cy}`;
+        w.pts = [...out, [x, below], [edge, below], [edge, y], [into[0][0], y], ...into];
+      } else w.pts = [...out, [x, y], [into[0][0], y], ...into];
+    } else if (!between.length && B.l >= A.r) w.pts = [[A.r, A.cy], [B.l, B.cy]];
     else {                                                 // same row but not neighbours (a skip connection): arc over the top
       // ponytail: arcs are not routed around each other, and the way round by the right edge shares one track; many long skips will overlap
       const y = Math.min(A.t, B.t, ...between.map(e => topOf(e, w.a, w.b))) - 12 - lane++ % 2 * 6;
-      w.d = rounded([[A.cx, A.t], [A.cx, y], [B.cx, y], [B.cx, B.t]]);
+      w.pts = [[A.cx, A.t], [A.cx, y], [B.cx, y], [B.cx, B.t]];
     }
-    return w.e = svg('path', { d: w.d, class: 'w' });
   });
+  tidy([...box.values()]);
+  const paths = G.wires.map(w => w.e = svg('path', { d: w.d = rounded(w.pts), class: 'w' }));
   G.svg.replaceChildren(G.svg.firstChild, ...paths);
   paint(false);
+}
+// Then all of them together: draw first, correct after. A piece too close to a box slides clear of it. And since each
+// arrow was routed by itself, two can end up on one line (the gap above a row, a gutter, the track along the right
+// edge): arrows that share a start or an end may share it, that is how a fork or a join looks; the others are moved
+// onto tracks of their own, 5px apart.
+function tidy(cards) {
+  const segs = [];
+  // how far the line `at`, from lo to hi, stays from the nearest box (negative: it runs through one)
+  const room = (h, at, lo, hi) => Math.min(99, ...cards.map(o => { const [a0, a1, b0, b1] = h ? [o.l, o.r, o.t, o.b] : [o.t, o.b, o.l, o.r]; return a1 < lo || a0 > hi ? 99 : at < b0 ? b0 - at : at > b1 ? at - b1 : -1; }));
+  for (const w of G.wires) {                               // corners only where the arrow really turns
+    w.pts = w.pts.filter((q, i, p) => !i || q[0] !== p[i - 1][0] || q[1] !== p[i - 1][1])
+      .filter((q, i, p) => !i || i === p.length - 1 || !(q[0] === p[i - 1][0] && q[0] === p[i + 1][0]) && !(q[1] === p[i - 1][1] && q[1] === p[i + 1][1])).map(q => [...q]);
+    for (let i = 1; i < w.pts.length - 2; i++) {           // a middle piece that runs through a box, or closer to one than 8px, slides sideways: to 8px clear, or to the most room there is within reach
+      const q = w.pts[i], p = w.pts[i + 1], h = +(q[1] === p[1]), lo = Math.min(q[1 - h], p[1 - h]), hi = Math.max(q[1 - h], p[1 - h]);
+      if (room(h, p[h], lo, hi) >= 8) continue;
+      const d = [...Array(31).keys()].map(k => k % 2 ? (k + 1) / 2 : -k / 2).reduce((best, d) => Math.min(8, room(h, p[h] + d, lo, hi)) > Math.min(8, room(h, p[h] + best, lo, hi)) ? d : best, 0);
+      q[h] += d; p[h] += d;
+    }
+    w.pts.slice(1).forEach((p, i) => { const q = w.pts[i], h = +(q[1] === p[1]); segs.push({ w, i, h, at: p[h], lo: Math.min(q[1 - h], p[1 - h]), hi: Math.max(q[1 - h], p[1 - h]) }); });
+  }
+  const onOneLine = (s, t) => s.h === t.h && Math.abs(s.at - t.at) < 4 && Math.min(s.hi, t.hi) - Math.max(s.lo, t.lo) > 8, done = new Set();
+  for (const s of segs) {
+    if (done.has(s)) continue;
+    const group = [s], nets = []; done.add(s);
+    for (let k = 0; k < group.length; k++) for (const t of segs) if (!done.has(t) && onOneLine(group[k], t)) { done.add(t); group.push(t); }
+    for (const g of group) { const n = nets.find(n => n.some(o => o.w.a === g.w.a || o.w.b === g.w.b)); n ? n.push(g) : nets.push([g]); }
+    // ponytail: one pass. Moving a piece can put it on top of a third arrow; flowCheck() will say so if it happens.
+    if (nets.length > 1) nets.forEach((n, k) => { const d = (k - (nets.length - 1) / 2) * 5; for (const g of n) { g.w.pts[g.i][g.h] += d; g.w.pts[g.i + 1][g.h] += d; } });
+  }
+}
+
+// ---- reading the figure back. flowCheck() lists what is wrong with the arrows as drawn right now: one that runs
+// through a box, two unrelated ones lying on top of each other, one that misses its box. flowCheckAll() does it at
+// every level. Call them from the console (or an agent's browser tool) after building a page.
+function flowCheck() {
+  const base = $('stage').getBoundingClientRect(), name = e => e.querySelector('.head').firstChild.textContent, out = new Set();
+  const R = e => { const r = e.getBoundingClientRect(); return { l: r.left - base.left, r: r.right - base.left, t: r.top - base.top, b: r.bottom - base.top }; };
+  const boxes = G.nodes.map(e => [e, R(e)]), segs = w => w.pts.slice(1).map((p, i) => [w.pts[i], p]), tag = w => `${name(w.a)} → ${name(w.b)}`;
+  const lap = (a0, a1, b0, b1) => Math.min(Math.max(a0, a1), Math.max(b0, b1)) - Math.max(Math.min(a0, a1), Math.min(b0, b1));
+  for (const w of G.wires) {
+    const [x, y] = w.pts.at(-1), B = R(w.b);
+    if (x < B.l - 2 || x > B.r + 2 || y < B.t - 2 || y > B.b + 2) out.add(`${tag(w)}：箭头没有落在目标方框上`);
+    for (const [[x0, y0], [x1, y1]] of segs(w)) for (const [e, o] of boxes)
+      if (e === w.a || e === w.b) continue;
+      else if (lap(x0, x1, o.l, o.r) > 1 && lap(y0, y1, o.t, o.b) > 1) out.add(`${tag(w)}：穿过方框“${name(e)}”`);
+      else if (y0 === y1 ? lap(x0, x1, o.l, o.r) > 20 && Math.min(Math.abs(y0 - o.t), Math.abs(y0 - o.b)) < 4 : lap(y0, y1, o.t, o.b) > 20 && Math.min(Math.abs(x0 - o.l), Math.abs(x0 - o.r)) < 4) out.add(`${tag(w)}：紧贴着方框“${name(e)}”的边`);
+  }
+  G.wires.forEach((u, i) => G.wires.slice(i + 1).forEach(v => {
+    if (u.a === v.a || u.b === v.b) return;                // sharing a trunk out of one box, or into one, is how forks and joins look
+    for (const [[x0, y0], [x1, y1]] of segs(u)) for (const [[p0, q0], [p1, q1]] of segs(v))
+      if ((y0 === y1 && q0 === q1 && Math.abs(y0 - q0) < 3 && lap(x0, x1, p0, p1) > 12) || (x0 === x1 && p0 === p1 && Math.abs(x0 - p0) < 3 && lap(y0, y1, q0, q1) > 12))
+        out.add(`${tag(u)} 和 ${tag(v)}：有一段重叠`);
+  }));
+  return [...out];
+}
+function flowCheckAll() {
+  const was = +$('level').value, out = {};
+  for (let L = 1; L <= maxLevel; L++) { setLevel(L); const bad = flowCheck(); if (bad.length) out[$('lvl').textContent] = bad; }
+  setLevel(was);
+  return out;
 }
 
 // ---- playback: everything on screen is a function of `step` (0 = only the inputs exist yet)
@@ -445,7 +511,7 @@ function play() {
 }
 function toggle(n) { stop(); open.has(n) ? open.delete(n) : open.add(n); build(); }
 function setLevel(L) {
-  stop(); open = new Set(groups.filter(g => g.depth < L && !folded(g))); open.add(SPEC.root);
+  stop(); open = new Set(groups.filter(g => levelOf(g) <= L && !folded(g))); open.add(SPEC.root);
   $('lvl').textContent = SPEC.levels?.[L - 1] ?? `第 ${L} 级，共 ${maxLevel} 级`;
   build();
 }
