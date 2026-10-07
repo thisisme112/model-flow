@@ -46,11 +46,19 @@ canvas, img { image-rendering: pixelated; display: block; max-width: 100%; heigh
 /* The figure is laid out like text: steps are inline boxes that wrap at the page edge, and a module is an inline
    span around its steps, so a module that does not fit on one row carries on in the next with its frame left open.
    --nt / --nb: room each row keeps above / below its centre line; --shift: half their difference, because a frame
-   hangs from the row's baseline, which sits that far above the centre line. --h: how many frame levels a frame has inside it. */
+   hangs from the row's baseline, which sits that far above the centre line. --up / --dn: how far a frame reaches
+   above / below that centre line.
+   Two things are boxes instead of text, so they make only their own row taller: .par, a set of branches (lanes one
+   under the other, with a gutter left and right for the arrows in and out), and .box, a module with branches inside it.
+   Every lane and every .box is a small figure of its own: its own rows, its own --nt / --nb. */
 .wrap { overflow-x: auto; overflow-y: hidden }
 .stage { position: relative; font-size: 0; line-height: 0; padding-block: 10px }
 #wires { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none }
-.frame { position: relative; padding: calc(77px + var(--h) * 12px - var(--shift)) 6px calc(61px + var(--h) * 6px + var(--shift)); border: 1.5px dashed var(--pencil); border-radius: 8px; background: rgba(27, 42, 65, .035) }
+.frame { position: relative; padding: calc(var(--up) - var(--shift)) 6px calc(var(--dn) + var(--shift)); border: 1.5px dashed var(--pencil); border-radius: 8px; background: rgba(27, 42, 65, .035) }
+.par, .box { vertical-align: middle; max-width: calc(100% - 8px); margin: 6px 4px; text-align: left }
+.par { display: inline-flex; flex-direction: column; padding: 12px 16px 6px }
+.box { display: inline-block; padding: 10px 6px 4px }
+.lane { display: block }
 #wires .w { fill: none; stroke: var(--ink); stroke-width: 1.5; marker-end: url(#ah) }
 #wires .w[data-s=todo] { stroke: var(--pencil); opacity: .35; marker-end: url(#ah-todo) }
 #wires .w[data-s=now] { stroke: var(--red); stroke-width: 2; marker-end: url(#ah-now) }
@@ -70,6 +78,7 @@ canvas, img { image-rendering: pixelated; display: block; max-width: 100%; heigh
 .thumb img { max-width: 56px; max-height: 56px; image-rendering: auto }
 .thumb .num { font: 600 17px var(--serif); color: var(--ink) }
 .thumb .tk { font-size: 10px; color: var(--ink); text-align: center; overflow-wrap: anywhere }
+.thumb .multi { display: flex; gap: 8px; align-items: center }
 .stack { position: relative }
 .stack canvas { position: absolute; background: var(--paper); outline: 1px solid var(--ink) }
 .dot { position: absolute; left: 0; top: 0; width: 10px; height: 10px; border-radius: 50%; background: var(--red); opacity: 0; offset-rotate: 0deg; pointer-events: none }
@@ -185,6 +194,13 @@ const maxLevel = Math.max(1, ...groups.map(g => g.depth + 1));
 let open = new Set([SPEC.root]), step = 0, V = null, G = null, timer = 0, anims = [];
 const rep = n => { let r = n; for (let p = n.parent; p; p = p.parent) if (!open.has(p)) r = p; return r; };
 const shown = n => !n.parent || (open.has(n.parent) && shown(n.parent));
+const framed = n => n !== SPEC.root && open.has(n) && shown(n);
+const boxed = n => framed(n) && !n.parallel && n.children.some(c => framed(c) && (c.parallel || boxed(c)));   // an open module with branches showing inside it
+const firstOp = n => isGroup(n) ? n.children.map(firstOp).find(Boolean) : isInput(n) ? null : n;
+// siblings built the same way form a run: [position in it, its length]. Of three or more, the slider opens only the first.
+const sig = n => (n.type || '') + (isGroup(n) ? '(' + n.children.map(sig) + ')' : '');
+const run = g => { const s = g.parent.children, same = j => s[j] && isGroup(s[j]) && sig(s[j]) === sig(g); let i = s.indexOf(g), a = i, b = i; while (same(a - 1)) a--; while (same(b + 1)) b++; return [i - a, b - a + 1]; };
+const folded = g => { const [i, n] = g.parent ? run(g) : [0, 1]; return i > 0 && n > 2; };
 const chain = n => { const c = []; for (let p = n.parent; p; p = p.parent) c.push(p); return c; };
 const lca = ns => chain(ns[0]).find(p => ns.every(n => chain(n).includes(p)));
 function view() {
@@ -255,33 +271,40 @@ function viz(t) {
 
 // ---- DOM: the browser's own inline layout places everything; build() only decides order and nesting
 function build() {
-  const first = !V, anchor = V && step ? firstLeaf(V.ops[step - 1]) : null, root = SPEC.root, stage = $('stage');
+  const first = !V, anchor = V && step ? firstOp(V.ops[step - 1]) : null, stage = $('stage');
   V = view();
   step = anchor ? V.ops.indexOf(rep(anchor)) + 1 : first ? V.ops.length : 0;
-  const framed = n => n !== root && open.has(n) && shown(n);
-  const hOf = n => { const ks = n.children.filter(framed); return ks.length ? 1 + Math.max(...ks.map(hOf)) : 0; };
-  const H = hOf(root), nb = (H ? 55 + H * 6 : 53) + 12;
-  G = { ops: new Map(), ins: new Map(), wires: [], nt: (H ? 65 + H * 12 : 71) + 12 };
-  for (const [k, v] of [['--nt', G.nt], ['--nb', nb], ['--shift', (G.nt - nb) / 2]]) stage.style.setProperty(k, v + 'px');
+  G = { ops: new Map(), ins: new Map(), wires: [] };
 
   // one card per step: what it is on top, what it turns the data into underneath
   const card = (n, input) => {
-    const t = lastLeaf(n).out, pick = el('button', 'pick', el('span', 'head', n.name, input ? null : el('small', '', n.type || '模块')), el('span', 'thumb', thumb(t)), el('span', '', shapeStr(t)));
+    const made = V.data.filter(d => d.prod === n).map(d => d.leaf.out), many = made.length > 1, t = lastLeaf(n).out, multi = many && el('span', 'multi', made.slice(0, 3).map(thumb));
+    if (multi) multi.style.zoom = made.length > 2 ? .36 : .5;
+    const pick = el('button', 'pick', el('span', 'head', n.name, input ? null : el('small', '', n.type || '模块')), el('span', 'thumb', multi || thumb(t)), el('span', '', many ? made.length + ' 路输出' : shapeStr(t)));
     pick.onclick = () => go(input ? 0 : V.ops.indexOf(n) + 1);
     const c = el('div', 'card' + (input ? ' in' : isGroup(n) ? ' group' : ''), pick);
     c.style.setProperty('--k', `var(--k-${kindOf(n)})`);
     if (isGroup(n)) { const x = el('button', 'exp', '+'); x.setAttribute('aria-label', `展开 ${n.name}`); x.onclick = () => toggle(n); c.append(x); }
     (input ? G.ins : G.ops).set(n, c); return c;
   };
-  (function fill(box, n) {
-    for (const c of n.children) {
-      if (framed(c)) {
-        const lab = el('button', 'glabel', c.name + ' ', el('span', '', '−')), f = el('span', 'frame', lab), h = hOf(c);
-        lab.setAttribute('aria-label', `收起 ${c.name}`); lab.onclick = () => toggle(c);
-        f.style.setProperty('--h', h); f.dataset.pt = 77 + h * 12; fill(f, c); box.append(f);
-      } else box.append(card(c, isInput(c)));
-    }
-  })((stage.replaceChildren(), stage), root);
+  // vertical room: how far a thing reaches above / below the centre line of its row. Branches and boxed modules count
+  // for nothing here: they are boxes, and the browser makes their own row as tall as they turn out.
+  const room = (ns, up, dn, a, b) => ns.map(ext).reduce(([u, d], [x, y]) => [Math.max(u, x + a), Math.max(d, y + b)], [up, dn]);
+  const ext = n => !framed(n) ? [53, 53] : n.parallel || boxed(n) ? [0, 0] : room(n.children, 77, 61, 12, 6);
+  const flow = (e, m) => { for (const [k, v] of [['--nt', m[0]], ['--nb', m[1]], ['--shift', (m[0] - m[1]) / 2]]) e.style.setProperty(k, v + 'px'); return m; };
+  const put = (box, c, m) => {                             // m: the room rows keep in the flow this goes into
+    if (!framed(c)) return box.append(card(c, isInput(c)));
+    const [i, len] = run(c), lab = el('button', 'glabel', c.name + (!i && len > 2 ? ` ×${len}` : '') + ' ', el('span', '', '−')), f = el('span', 'frame' + (c.parallel ? ' par' : boxed(c) ? ' box' : ''), lab);
+    lab.setAttribute('aria-label', `收起 ${c.name}`); lab.onclick = () => toggle(c);
+    if (c.parallel) for (const k of c.children) { const lane = el('span', 'lane'); put(lane, k, flow(lane, room([k], 63, 59, 10, 6))); f.append(lane); }
+    else if (boxed(c)) { const inner = flow(f, room(c.children, 77, 61, 10, 6)); c.children.forEach(k => put(f, k, inner)); }
+    else { const [u, d] = ext(c); f.style.setProperty('--up', u + 'px'); f.style.setProperty('--dn', d + 'px'); f.dataset.pt = u; c.children.forEach(k => put(f, k, m)); }
+    if (c.parallel || boxed(c)) f.style.marginTop = m[0] - m[1] + 6 + 'px';   // its middle on the centre line of the row, like a card's
+    box.append(f);
+  };
+  stage.replaceChildren();
+  const m = flow(stage, room(SPEC.root.children, 83, 65, 12, 12));
+  SPEC.root.children.forEach(c => put(stage, c, m));
   G.nodes = [...stage.querySelectorAll('.card')];
   for (const d of V.data) for (const c of d.cons) {
     const a = d.prod ? G.ops.get(d.prod) : G.ins.get(d.leaf), b = G.ops.get(c);
@@ -293,12 +316,15 @@ function build() {
   stage.append(G.svg);
   const kinds = [...new Set(V.ops.map(kindOf))].filter(k => KINDS.some(x => x[0] === k));
   $('legend').replaceChildren(...kinds.map(k => { const i = el('i'); i.style.setProperty('--k', `var(--k-${k})`); return el('span', '', i, KINDS.find(x => x[0] === k)[2]); }),
-    ...(V.ops.some(isGroup) ? [el('span', '', '带阴影的方框里面还有更细的步骤')] : []));
+    ...(V.ops.some(isGroup) ? [el('span', '', '带阴影的方框里面还有更细的步骤')] : []),
+    ...(stage.querySelector('.par') ? [el('span', '', '同一个虚线框里上下叠放的几行，是并行的几条支路')] : []),
+    ...(groups.some(g => framed(g) && !run(g)[0] && run(g)[1] > 2) ? [el('span', '', '标着 ×N 的模块后面还有 N−1 个结构相同的，只展开了这一个，其余的点“＋”展开')] : []));
   wire(); detail(); ui();
 }
 
 // ---- arrows: measured from where the browser put things, so they are redrawn whenever the figure reflows
 function rounded(p, r = 8) {
+  p = p.filter((q, i) => !i || q[0] !== p[i - 1][0] || q[1] !== p[i - 1][1]);
   let d = `M${p[0]}`;
   for (let i = 1; i < p.length - 1; i++) {
     const [x0, y0] = p[i - 1], [x1, y1] = p[i], [x2, y2] = p[i + 1], l1 = Math.hypot(x1 - x0, y1 - y0), l2 = Math.hypot(x2 - x1, y2 - y1), k = Math.min(r, l1 / 2, l2 / 2);
@@ -307,25 +333,40 @@ function rounded(p, r = 8) {
   return d + `L${p.at(-1)}`;
 }
 function wire() {
-  const stage = $('stage'), nodes = G.nodes, mid = e => { const r = e.getBoundingClientRect(); return (r.top + r.bottom) / 2; };
+  const stage = $('stage'), nodes = G.nodes, rect = e => e.getBoundingClientRect();
+  const up = (e, f) => { for (let p = e.parentNode; p !== stage; p = p.parentNode) f(p); }, flowOf = e => e.parentNode.closest('.lane, .box') || stage;
+  // the outermost set of branches around e (that does not also hold o)
+  const par = (e, o) => { let r = null; up(e, p => { if (p.classList.contains('par') && !(o && p.contains(o))) r = p; }); return r; };
+  const mid = e => { let r = e; up(e, p => { if (p.matches('.par, .box')) r = p; }); r = rect(r); return (r.top + r.bottom) / 2; };
   stage.style.textAlign = nodes.every(e => Math.abs(mid(e) - mid(nodes[0])) < 4) ? 'center' : 'left';   // a figure that fits on one row is centred
-  const base = stage.getBoundingClientRect(), box = new Map(), rows = [];
-  for (const e of nodes) {
-    const r = e.getBoundingClientRect(), cy = (r.top + r.bottom) / 2 - base.top;
-    let row = rows.findIndex(y => Math.abs(y - cy) < 4); if (row < 0) row = rows.push(cy) - 1;
-    box.set(e, { l: r.left - base.left, r: r.right - base.left, t: r.top - base.top, cx: (r.left + r.right) / 2 - base.left, cy, row });
-  }
+  const base = rect(stage), room = (e, k) => parseFloat(getComputedStyle(e).getPropertyValue(k));
+  const rel = e => { const r = rect(e); return { l: r.left - base.left, r: r.right - base.left, t: r.top - base.top, b: r.bottom - base.top, cx: (r.left + r.right) / 2 - base.left, cy: (r.top + r.bottom) / 2 - base.top, nt: room(e, '--nt'), nb: room(e, '--nb') }; };
+  const box = new Map(nodes.map(e => [e, rel(e)])), boxes = [...stage.querySelectorAll('.par, .box')].map(e => Object.assign(rel(e), { flow: flowOf(e) }));
   // the top of whatever stands between two ends of an arc: the step itself, or a whole module it sits in
-  const topOf = (e, a, b) => { let t = box.get(e).t; for (let p = e.parentNode; p !== stage; p = p.parentNode) if (!p.contains(a) && !p.contains(b)) t = Math.min(t, box.get(e).cy - p.dataset.pt); return t; };
+  const topOf = (e, a, b) => { let t = box.get(e).t; up(e, p => { if (!p.contains(a) && !p.contains(b)) t = Math.min(t, p.matches('.par, .box') ? rect(p).top - base.top : p.dataset.pt ? box.get(e).cy - p.dataset.pt : t); }); return t; };
+  // where the row of e ends above (s = -1) or below (s = 1): the room its steps keep, or further if a box stands on it
+  const rowEnd = (e, o, s) => Math[s < 0 ? 'min' : 'max'](o.cy + (s < 0 ? -o.nt : o.nb), ...boxes.filter(x => x.flow === flowOf(e) && x.t < o.cy && x.b > o.cy).map(x => s < 0 ? x.t - 6 : x.b + 6));
+  const hits = (x, y0, y1) => nodes.some(e => { const o = box.get(e); return o.l - 3 < x && x < o.r + 3 && o.t < y1 && o.b > y0; });
+  const free = (x0, x1, y) => !nodes.some(e => { const o = box.get(e); return Math.abs(o.cy - y) < 4 && o.l >= x0 && o.r <= x1; });   // no step on this row between x0 and x1
   let lane = 0;
   const paths = G.wires.map(w => {
     const A = box.get(w.a), B = box.get(w.b), ia = nodes.indexOf(w.a), ib = nodes.indexOf(w.b), between = nodes.slice(Math.min(ia, ib) + 1, Math.max(ia, ib));
-    if (A.row !== B.row) {                                 // next row: out to the right, back along the gap between rows, drop in from above
-      const x = A.r + 5, y = rows[B.row] - G.nt;
-      w.d = rounded([[A.r, A.cy], [x, A.cy], [x, y], [B.cx, y], [B.cx, B.t]]);
+    if (Math.abs(A.cy - B.cy) >= 4) {                      // another row
+      const PA = par(w.a, w.b), PB = par(w.b, w.a), a = PA && rel(PA), b = PB && rel(PB);
+      // out: to the right; from inside a set of branches, to its right gutter. In: dropped in from the gap above the row;
+      // into a set of branches, down its left gutter.
+      const out = !a ? [[A.r, A.cy], [A.r + 5, A.cy]] : free(A.r, a.r, A.cy) ? [[A.r, A.cy], [a.r - 8, A.cy]] : [[A.r, A.cy], [A.r + 5, A.cy], [A.r + 5, A.cy + A.nb], [a.r - 8, A.cy + A.nb]];
+      const into = !b ? [[B.cx, B.cy - B.nt], [B.cx, B.t]] : free(b.l, B.l, B.cy) ? [[b.l + 8, B.cy], [B.l, B.cy]] : [[b.l + 8, B.cy - B.nt], [B.cx, B.cy - B.nt], [B.cx, B.t]];
+      const [x] = out.at(-1), below = rowEnd(PA || w.a, a || A, 1), y = rowEnd(PB || w.b, b || B, -1);   // y: the gap above the row we are going to
+      if (b && A.cy > b.t && A.cy < b.b && A.r <= b.l && free(A.r, b.l, A.cy)) w.d = rounded([[A.r, A.cy], [b.l + 8, A.cy], ...into]);            // a fork: straight in from the left
+      else if (a && !b && B.cy > a.t && B.cy < a.b && B.l >= a.r && free(a.r, B.l, B.cy)) w.d = rounded([...out, [x, B.cy], [B.l, B.cy]]);        // a join: straight out to the right
+      else if (y > below + 2 && hits(x, below, y)) {       // rows in between, and something in the way: go round by the right edge
+        const edge = rel(flowOf(w.a)).r - 3;
+        w.d = rounded([...out, [x, below], [edge, below], [edge, y], [into[0][0], y], ...into]);
+      } else w.d = rounded([...out, [x, y], [into[0][0], y], ...into]);
     } else if (!between.length && B.l >= A.r) w.d = `M${A.r},${A.cy}L${B.l},${B.cy}`;
     else {                                                 // same row but not neighbours (a skip connection): arc over the top
-      // ponytail: arcs and row changes are not routed around obstacles; a skip that lands mid-row two or more rows down can cross boxes
+      // ponytail: arcs are not routed around each other, and the way round by the right edge shares one track; many long skips will overlap
       const y = Math.min(A.t, B.t, ...between.map(e => topOf(e, w.a, w.b))) - 12 - lane++ % 2 * 6;
       w.d = rounded([[A.cx, A.t], [A.cx, y], [B.cx, y], [B.cx, B.t]]);
     }
@@ -365,16 +406,19 @@ function gradOf(leaf) {
 function detail() {
   const cur = V.ops[step - 1], col = (title, ...body) => el('div', 'col', el('h3', '', title), body);
   if (!cur) {
-    $('detail').replaceChildren(...V.data.filter(d => !d.prod).map(d => col(d.leaf.name, el('p', '', descOf(d.leaf)), io(d.leaf, '数据'), d.leaf.note ? el('p', 'cap', d.leaf.note) : null, gradOf(d.leaf))));
+    $('detail').replaceChildren(...leaves.filter(isInput).map(l => col(l.name, el('p', '', descOf(l)), io(l, '数据'), l.note ? el('p', 'cap', l.note) : null, gradOf(l))));
     return $('cap').replaceChildren(el('b', '', '起点。'), SPEC.example || '这些是送进来的数据，还没有经过任何处理。');
   }
-  const ins = V.data.filter(d => d.cons.includes(cur)), made = V.data.filter(d => d.prod === cur), exp = isGroup(cur) && el('button', '', '展开看里面');
+  // what comes in: data from other boxes, and any input that enters inside this one
+  const ins = V.data.filter(d => d.cons.includes(cur)).map(d => d.leaf).concat(leaves.filter(l => isInput(l) && rep(l) === cur));
+  const made = V.data.filter(d => d.prod === cur), exp = isGroup(cur) && el('button', '', '展开看里面');
   if (exp) exp.onclick = () => toggle(cur);
   $('detail').replaceChildren(
-    col('进来', ins.length ? ins.map(d => io(d.leaf, '来自 ' + d.leaf.name)) : small('这一步没有输入数据。')),
-    col('这一步', el('h2', '', cur.name), el('div', 'mono', cur.type || ''), el('p', '', descOf(cur)),
+    col('进来', ins.length ? ins.map(l => io(l, '来自 ' + l.name)) : small('这一步没有输入数据。')),
+    col('这一步', el('h2', '', cur.name), el('div', 'mono', [cur.type, cur.src].filter(Boolean).join(' · ')), el('p', '', descOf(cur)),
       exp && [small('里面依次是：' + cur.children.map(c => c.name).join(' → ')), el('div', '', exp)]),
-    col('出去', made.map(d => [io(d.leaf, made.length > 1 || isGroup(cur) ? d.leaf.name + ' 的输出' : '输出'), gradOf(d.leaf)])));
+    col('出去', made.map(d => [io(d.leaf, made.length > 1 || isGroup(cur) ? d.leaf.name + ' 的输出' : '输出'),
+      ...Object.entries(d.leaf.also || {}).map(([k, t]) => io({ out: t }, k)), gradOf(d.leaf)])));
   $('cap').replaceChildren(el('b', '', `第 ${step} 步，共 ${V.ops.length} 步：${cur.name}。`), cur.note || '');
 }
 function ui() {
@@ -394,7 +438,7 @@ function play() {
 }
 function toggle(n) { stop(); open.has(n) ? open.delete(n) : open.add(n); build(); }
 function setLevel(L) {
-  stop(); open = new Set(groups.filter(g => g.depth < L)); open.add(SPEC.root);
+  stop(); open = new Set(groups.filter(g => g.depth < L && !folded(g))); open.add(SPEC.root);
   $('lvl').textContent = SPEC.levels?.[L - 1] ?? `第 ${L} 级，共 ${maxLevel} 级`;
   build();
 }
