@@ -40,17 +40,33 @@ Write the hierarchy before running anything. Aim for 3–4 levels, each a comple
 Follow the code's own module names at the leaves so the page maps back to the source. Name groups in the
 reader's language. Give the level names in `levels`.
 
+**Branches.** Where the code runs two or more paths that meet again (two towers, a projection shortcut next to
+the main path), give each path its own group and wrap them in a group with `"parallel": true`: they are drawn as
+lanes one under the other. A tower's own input goes inside its lane, as the lane's first leaf. An identity skip
+needs nothing: it is only an edge, and is drawn as an arc. Lanes must still be in execution order.
+
+**Repeats.** Leave repeated blocks (twelve transformer layers) as siblings. Of three or more built the same way
+the slider opens only the first and marks it ×N; the reader can open any other.
+
 ## 3. Trace one example
 
 Pick one real sample with a known right answer; an interesting one beats the first one (a hard case, a
 near miss). Never invent numbers.
 
-- **PyTorch**: `fxtrace.py` — `leaves, raw = trace(model, x, loss_fn, target)`. It uses torch.fx, so it sees
-  functional ops and real edges, and returns execution-ordered leaves with activations and gradients.
-  `nest(leaves, model)` groups them by module hierarchy; usually you regroup by hand into the levels from
-  step 2. `examples/mnist_spec.py` is the whole pattern.
-- **fx cannot trace it** (data-dependent control flow, many HF models): restate `forward` step by step and
-  record each intermediate, asserting the result equals `model(x)`. `examples/mnist_trace.py` does this.
+- **PyTorch**: `fxtrace.py` — `leaves, raw = trace(model, x, loss_fn, target)`; `x` is a tensor, a tuple of
+  inputs or a dict of keyword inputs. It uses torch.fx, so it sees functional ops and real edges, and returns
+  execution-ordered leaves with activations, gradients and the source line of each step. A step with several
+  results (attention, an LSTM) shows the first and keeps the others in `also`; a parameter that `forward` uses
+  directly (a position table) is an input. `nest(leaves, model)` groups the leaves by module call; usually you
+  regroup by hand into the levels from step 2. `examples/mnist_spec.py` is the whole pattern.
+- **fx cannot trace it** (data-dependent control flow, most Hugging Face models): `trace` says so and falls
+  back to forward hooks on its own. The steps are then the innermost module calls and the edges come from the
+  autograd graph, so an op between two modules (the `+` of a residual, a softmax) has no box; say what it does
+  in the note of the step that follows. Pass `hooks=True` to go straight there, which also opens `torch.nn`
+  containers that fx keeps as one step (`nn.TransformerEncoder`).
+- **Several stages of one model** (during training, before and after fine-tuning): trace the same sample through
+  each set of weights, turn each trace into `variant(name, leaves, example=…)`, and list them under
+  `variants`. The page gets one more slider. `examples/mnist_spec.py` does this for five moments of an epoch.
 - **Anything else** (sklearn, JAX, TF, plain code): a few lines in the project's language that run the sample
   and dump each step's output. `examples/tiny-cnn.js` shows it, with finite-difference gradients.
 - **Cannot run it at all**: shapes only (omit `data`), and say so in `summary`.
@@ -67,7 +83,8 @@ For every node a reader can land on, groups included:
 ## 5. Build and look
 
 `node build.js spec.json out.html`, then open it once: the lowest level should read as an overview, the
-highest should show every layer, and stepping through should tell the story in order.
+highest should show every layer, and stepping through should tell the story in order. “导出 SVG” on the page
+saves the figure as it stands (level, open modules) as plain vector shapes for a paper or a slide.
 
 ## Spec
 
@@ -76,7 +93,10 @@ highest should show every layer, and stepping through should tell the story in o
   "title": "…", "source": "repo · file", "summary": "what the model is, 1–2 sentences",
   "example": "the one sample being traced",
   "levels": ["整体", "两个阶段", "功能块", "每一层"],   // optional names for the slider positions
-  "root": { "name": "root", "children": [NODE] }       // root itself is never drawn
+  "root": { "name": "root", "children": [NODE] },      // root itself is never drawn
+  "variants": { "label": "训练进度",                    // optional: the same steps traced again; adds a slider
+    "items": [ { "name": "第 100 步", "example": "…",   // example: replaces the top-level one while this item is shown
+                 "nodes": { "conv1": { "out": TENSOR, "grad": TENSOR, "note": "…" } } } ] }  // by node id; the last item is shown first
 }
 // NODE — a group if it has children, otherwise one operation. Children are in execution order.
 { "id": "conv1",            // optional; default is the path of names. Must be unique.
@@ -85,9 +105,13 @@ highest should show every layer, and stepping through should tell the story in o
                             // On a group, applies to its first leaf.
   "out": TENSOR,            // this step's output for the example
   "grad": TENSOR | number,  // d(loss)/d(out); a number is taken as the norm
+  "also": { "注意力权重": TENSOR },  // further results of this step, shown in the panel under their names
+  "src": "main.py:21",      // where in the code this step runs
   "kind": "conv",           // optional colour: conv pool dense act norm attn shape loss. Guessed from type.
+  "parallel": true,         // on a group: its children are branches, drawn as lanes one under the other
   "children": [NODE] }
-// A leaf with "type": "Input" is data entering from outside (the sample, the label). It has no box.
+// A leaf with "type": "Input" is data entering from outside (the sample, the label, a learned table). It has no
+// box, and may sit inside the group that uses it.
 // TENSOR — one sample, no batch dimension
 { "shape": [8, 26, 26], "data": [/* flat, row-major */],
   "full": [32, 26, 26],        // true shape, when channels were dropped or the map was shrunk
@@ -104,10 +128,13 @@ Keep it light: `fxtrace.tensor` keeps at most 8 channels of 32×32 and vectors u
 ## Limits
 
 - Layout is the browser's own text flow: steps run left to right and wrap at the page edge, and a module that
-  does not fit on one row carries on in the next with its frame left open. Parallel branches are therefore drawn
-  one after the other and joined by arcs, not stacked side by side.
-- Arrows are not routed around obstacles. A skip connection that lands in the middle of a row two or more rows
-  below its source can cross other boxes.
-- One example per page, one set of weights. For a comparison, build two pages.
-- Tree order is playback order, so it must be execution order.
-- `fxtrace` drops `get_attr` nodes (parameters used directly in `forward`), so their edges do not appear.
+  does not fit on one row carries on in the next with its frame left open. Branches are the exception: lanes
+  stacked in a box of their own, and a module with branches inside it becomes a closed box too.
+- Branches are drawn where the spec says `parallel`; the viewer does not find them from the edges.
+- An arrow to a row further down goes round by the right edge when a box is in its way. Arrows are not routed
+  around each other, so many long skips overlap on that edge and over the tops of rows.
+- One example per page. `variants` covers several sets of weights (or samples) over the same steps; for models
+  with different steps, build two pages.
+- Tree order is playback order, so it must be execution order. Branches play one lane after the other.
+- On the hook path a parameter that `forward` uses directly has no input box, and the gradient shown for a
+  tensor that is later changed in place by a function (not a module) is that of the changed tensor.

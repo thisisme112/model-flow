@@ -35,7 +35,8 @@ canvas, img { image-rendering: pixelated; display: block; max-width: 100%; heigh
 .bar { display: flex; flex-wrap: wrap; gap: .8rem 2.5rem; align-items: center }
 .ctl { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .6rem; font-size: .9rem }
 .ctl label { font-weight: 600 }
-#level { width: 8rem }
+[hidden] { display: none !important }
+#level, #variant { width: 8rem }
 #step { width: 10rem }
 #play { background: var(--ink); color: var(--paper); min-width: 5.4rem }
 
@@ -125,6 +126,8 @@ figure { margin: 0; display: grid; gap: .6rem; min-width: 0 }
   <section class="bar">
     <div class="ctl"><label for="level">详略</label><span>概括</span><input type="range" id="level" min="1" step="1"><span>详细</span><output id="lvl" for="level" class="small"></output></div>
     <div class="ctl"><button id="first" aria-label="回到起点">⏮</button><button id="prev">← 上一步</button><button id="play"></button><button id="next">下一步 →</button><input type="range" id="step" min="0" step="1" aria-label="当前步骤"><output id="pos" for="step" class="small"></output></div>
+    <div class="ctl" id="vctl" hidden><label for="variant" id="vlab"></label><input type="range" id="variant" min="0" step="1"><output id="vname" for="variant" class="small"></output></div>
+    <div class="ctl"><button id="export">导出 SVG</button></div>
   </section>
   <figure>
     <div class="wrap"><div class="stage" id="stage"></div></div>
@@ -234,7 +237,7 @@ function thumb(t) {
   if (!d) return el('span', 'tk', '…');
   if (d.length === 1) return el('span', 'num', f(d[0]));
   const max = absmax(d), s = t.shape?.length ? t.shape : [d.length];
-  if (s.length < 2) return d.length <= 16 ? miniBars(d, max) : cv(d, 1, d.length, max, 12);
+  if (s.length < 2) { if (d.length <= 16) return miniBars(d, max); const strip = cv(d, 1, d.length, max, 12); strip.style.height = '46px'; return strip; }
   const W = s.at(-1), H = s.at(-2), n = H * W, C = Math.min(3, d.length / n), k = 40 / Math.max(H, W), box = el('span', 'stack');
   box.style.width = W * k + (C - 1) * 6 + 'px'; box.style.height = H * k + (C - 1) * 6 + 'px';
   for (let c = C - 1; c >= 0; c--) { const m = cv(d.slice(c * n, (c + 1) * n), W, H, max, W * k); m.style.left = c * 6 + 'px'; m.style.top = (C - 1 - c) * 6 + 'px'; box.append(m); }
@@ -443,9 +446,78 @@ function setLevel(L) {
   build();
 }
 
+// ---- export: the figure as it stands (level, open modules) redrawn as plain SVG shapes, for a paper or a slide.
+// Everything is measured off the page, so positions and line breaks are the ones on screen. All in ink: no current step.
+function figureSvg() {
+  const stage = $('stage'), base = stage.getBoundingClientRect(), css = getComputedStyle(document.documentElement), tok = k => css.getPropertyValue(k).trim();
+  const ink = tok('--ink'), pencil = tok('--pencil'), paper = tok('--paper'), n = v => +v.toFixed(1), esc = s => s.replace(/[&<>]/g, c => `&#${c.charCodeAt(0)};`);
+  const at = r => [n(r.left - base.left), n(r.top - base.top), n(r.width), n(r.height)], box = e => at(e.getBoundingClientRect());
+  const rect = ([x, y, w, h], a) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" ${a}/>`;
+  const image = (e, href) => { const [x, y, w, h] = box(e); return `<image href="${href}" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="none"/>`; };
+  // heat maps are a few pixels across: enlarge them here, so no viewer gets to blur them
+  const big = c => { const s = Math.ceil(160 / Math.max(c.width, c.height)), b = el('canvas'); b.width = c.width * s; b.height = c.height * s; const x = b.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(c, 0, 0, b.width, b.height); return b.toDataURL(); };
+  const out = [];
+  for (const e of G.nodes) e.dataset.s = 'done';
+  for (const f of stage.querySelectorAll('.frame')) {     // a module: one piece per row, left open where a row break cuts it
+    const rs = [...f.getClientRects()].map(at);
+    rs.forEach(([x, y, w, h], i) => {
+      const L = i > 0, R = i < rs.length - 1, r = x + w, b = y + h;
+      out.push(rect([x, y, w, h], `fill="${ink}" fill-opacity=".035"`), `<path d="M${x + (L ? 0 : 8)},${y}H${r - (R ? 0 : 8)}${R ? `M${r},${b}` : `Q${r},${y} ${r},${y + 8}V${b - 8}Q${r},${b} ${r - 8},${b}`}H${x + (L ? 0 : 8)}${L ? '' : `Q${x},${b} ${x},${b - 8}V${y + 8}Q${x},${y} ${x + 8},${y}`}" fill="none" stroke="${pencil}" stroke-width="1.5" stroke-dasharray="5 4"/>`);
+    });
+  }
+  for (const l of stage.querySelectorAll('.glabel')) out.push(rect(box(l), `fill="${paper}"`));
+  for (const c of stage.querySelectorAll('.card')) {
+    const [x, y, w, h] = box(c), head = c.querySelector('.head'), hh = box(head)[3], r = x + w;
+    if (c.classList.contains('group')) out.push(rect([x + 5, y + 5, w, h], `rx="4" fill="${paper}" stroke="${pencil}"`));
+    out.push(rect([x, y, w, h], `rx="4" fill="${paper}"`));
+    if (!c.classList.contains('in')) out.push(`<path d="M${x},${y + hh}V${y + 4}Q${x},${y} ${x + 4},${y}H${r - 4}Q${r},${y} ${r},${y + 4}V${y + hh}z" fill="${getComputedStyle(head).backgroundColor}"/>`);
+    for (const m of c.querySelectorAll('canvas, img')) out.push(m.closest('.stack') ? rect(box(m), `fill="${paper}" stroke="${ink}"`) : '', image(m, m.src || big(m)));
+    out.push(rect([x, y, w, h], `rx="4" fill="none" stroke="${ink}" stroke-width="1.5"`));
+  }
+  // text: one <text> per line as the browser broke it, found by asking where each character sits
+  const pen = el('canvas').getContext('2d'), range = document.createRange(), walk = document.createTreeWalker(stage, NodeFilter.SHOW_TEXT);
+  for (let t; (t = walk.nextNode());) {
+    const p = t.parentElement, cs = getComputedStyle(p), clip = p.closest('.head')?.getBoundingClientRect();
+    if (p.closest('.exp, .glabel span')) continue;
+    pen.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const m = pen.measureText('x'), up = m.fontBoundingBoxAscent / (m.fontBoundingBoxAscent + m.fontBoundingBoxDescent);
+    for (let i = 0, line = null; i <= t.length; i++) {
+      const r = i < t.length ? (range.setStart(t, i), range.setEnd(t, i + 1), range.getBoundingClientRect()) : null;
+      if (line && (!r || Math.abs(r.top - line.top) > 2)) {
+        const mid = line.top + line.h / 2;
+        if (line.s.trim() && !(clip && (mid < clip.top || mid > clip.bottom))) out.push(`<text x="${n(line.left - base.left)}" y="${n(line.top - base.top + line.h * up)}" font-family="${cs.fontFamily.replace(/"/g, "'")}" font-size="${cs.fontSize}" font-weight="${cs.fontWeight}" fill="${cs.color}" xml:space="preserve">${esc(line.s)}</text>`);
+        line = null;
+      }
+      if (r && r.width) line ? line.s += t.data[i] : line = { s: t.data[i], left: r.left, top: r.top, h: r.height };
+    }
+  }
+  for (const w of G.wires) out.push(`<path d="${w.d}" fill="none" stroke="${ink}" stroke-width="1.5" marker-end="url(#a)"/>`);
+  paint(false);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.ceil(base.width)}" height="${Math.ceil(base.height)}" viewBox="0 0 ${Math.ceil(base.width)} ${Math.ceil(base.height)}">` +
+    `<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 1L10 5L0 9z" fill="${ink}"/></marker></defs>${out.join('')}</svg>`;
+}
+$('export').onclick = () => {
+  const a = el('a'); a.href = URL.createObjectURL(new Blob([figureSvg()], { type: 'image/svg+xml' })); a.download = (SPEC.title || 'model-flow') + '.svg';
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+
+// ---- variants: the same steps traced again (other weights, another sample). Picking one swaps the data and the words in.
+const VAR = SPEC.variants, EXAMPLE = SPEC.example;
+function pick(i) {
+  const v = VAR.items[i];
+  for (const id in v.nodes) Object.assign(byId.get(id), v.nodes[id]);
+  SPEC.example = v.example ?? EXAMPLE;
+  $('variant').value = i; $('vname').textContent = v.name; $('example').textContent = SPEC.example ? '跟踪的实例：' + SPEC.example : '';
+}
+
 document.title = SPEC.title || document.title;
 $('title').textContent = SPEC.title || ''; $('src').textContent = SPEC.source || ''; $('summary').textContent = SPEC.summary || '';
 $('example').textContent = SPEC.example ? '跟踪的实例：' + SPEC.example : '';
+if (VAR) {
+  $('vctl').hidden = false; $('vlab').textContent = VAR.label || '版本'; $('variant').max = VAR.items.length - 1;
+  $('variant').oninput = e => { stop(); pick(+e.target.value); build(); };
+  pick(VAR.items.length - 1);
+}
 $('level').max = maxLevel; $('level').value = Math.min(2, maxLevel);
 $('level').oninput = e => setLevel(+e.target.value);
 $('step').oninput = e => go(+e.target.value);

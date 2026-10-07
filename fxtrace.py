@@ -3,6 +3,7 @@
     from fxtrace import trace, nest
     leaves, raw = trace(model, x, loss_fn, target)     # x and target carry a batch dimension of 1
     root = nest(leaves, model)                          # or group the leaves into levels yourself
+    item = variant("after 100 steps", leaves)           # the same steps under other weights: one entry of spec["variants"]
 
 x:      one tensor, a tuple of positional inputs, or a dict of keyword inputs.
 leaves: one spec node per executed step, in execution order, with real edges ("from"), this example's
@@ -248,6 +249,11 @@ def trace(model, x, loss_fn=None, target=None, hooks=None):
                        "path": [], "from": last, "out": tensor(loss)})
         raw.update(loss=loss.detach(), target=target)
     return leaves, raw
+
+
+def variant(name, leaves, **more):
+    """One item of spec["variants"]["items"]: the same steps traced again, with other weights or another sample."""
+    return {"name": name, **more, "nodes": {n["id"]: {k: n[k] for k in ("out", "grad", "also", "note") if k in n} for n in leaves}}
 
 
 def nest(leaves, model):
