@@ -1,0 +1,260 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MNIST 数据流手记</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;900&display=swap">
+<style>
+/* Layout: one column on graph paper, three inked figures top to bottom — training curve, the path, the current step.
+   Single look by choice: this is a sheet of paper, it does not have a dark mode. */
+:root { color-scheme: light;
+  --paper: #f7f6f1; --grid: #e4e9ee; --ink: #1b2a41; --pencil: #6f7782; --red: #c8372d;
+  --serif: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --kai: "LXGW WenKai", "KaiTi", "STKaiti", "Kaiti SC", "Noto Serif SC", serif;
+}
+* { box-sizing: border-box }
+body { margin: 0; color: var(--ink); font: 16px/1.75 var(--serif); font-variant-numeric: tabular-nums; padding-block: 2rem 4rem; padding-inline: 16px;
+  background: linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 100% 24px, linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 24px 100%, var(--paper) }
+.page { max-width: 58rem; margin-inline: auto; display: grid; gap: 2.5rem }
+h1 { font-weight: 900; font-size: clamp(1.7rem, 4.5vw, 2.5rem); line-height: 1.25; margin: 0; text-wrap: balance }
+p { margin: 0 }
+.src { font-size: .8rem; letter-spacing: .12em; color: var(--pencil) }
+.lede { max-width: 36em; margin-top: .6rem }
+button { font: inherit; color: var(--ink); background: var(--paper); border: 1.5px solid var(--ink); border-radius: 2px; padding: .15rem .8rem; cursor: pointer }
+button:disabled { color: var(--pencil); border-color: var(--pencil); cursor: default }
+:focus-visible { outline: 2px solid var(--red); outline-offset: 2px }
+input[type=range] { accent-color: var(--red); flex: 1; min-width: 8rem; max-width: 22rem }
+
+figure { margin: 0; display: grid; gap: 1rem; min-width: 0 }
+figcaption { max-width: 40em; font-size: .95rem }
+figcaption b { font-weight: 600 }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem }
+.scroll { overflow-x: auto }
+.small { font-size: .8rem; color: var(--pencil); line-height: 1.5 }
+canvas { image-rendering: pixelated; display: block; max-width: 100%; height: auto }
+
+/* hand-inked outline: the wobble lives on a pseudo-element so the contents stay sharp */
+.inked { position: relative }
+.inked::before { content: ""; position: absolute; inset: 0; border: 1.5px solid var(--ink); border-radius: 3px; filter: url(#rough); pointer-events: none }
+
+#chart { display: block; width: 100%; min-width: 520px; height: auto }
+#chart text { font: 12px var(--serif); fill: var(--pencil) }
+#chart .dot { cursor: pointer }
+
+.pick { display: grid; justify-items: center; gap: .2rem; padding: .4rem .5rem; border-color: transparent; font-size: .8rem; line-height: 1.3 }
+.pick[aria-pressed=true] { border-color: var(--red); color: var(--red) }
+.verdict { font-family: var(--kai); font-size: 1.15rem }
+.verdict b { color: var(--red); font-size: 1.4rem }
+
+.strip { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 1rem 1.4rem }
+@media (max-width: 720px) { .strip { grid-template-columns: repeat(4, minmax(0, 1fr)) } .st:nth-child(4n+1)::after { display: none } }
+.st { position: relative; display: grid; justify-items: center; align-content: start; gap: .3rem; padding: .5rem .2rem; border: 0; background: none; font-size: .8rem; line-height: 1.35 }
+.st .thumb { width: 60px; height: 60px; display: grid; place-items: center; background: var(--paper) }
+.st .thumb span { font-size: 1rem; font-weight: 600 }
+.st + .st::after { content: "→"; position: absolute; left: -1.15rem; top: 1.6rem; color: var(--pencil) }
+.st.todo > * { opacity: .28 }
+.st.now { color: var(--red); font-weight: 600 }
+.st.now .thumb::before { border-color: var(--red); border-width: 2.5px }
+.st .shape { color: var(--pencil); font-weight: 400 }
+#play { background: var(--ink); color: var(--paper); min-width: 5.5rem }
+
+.detail { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 1.2rem 0; background: color-mix(in srgb, var(--paper) 85%, transparent) }
+.col { padding: 0 1.2rem; display: grid; gap: .7rem; align-content: start; min-width: 0 }
+.col + .col { border-left: 1px dashed var(--pencil) }
+@media (max-width: 720px) { .detail { grid-template-columns: minmax(0, 1fr); gap: 1.2rem } .col + .col { border-left: 0; border-top: 1px dashed var(--pencil); padding-top: 1.2rem } }
+.col h3 { margin: 0; font-size: .8rem; font-weight: 400; letter-spacing: .15em; color: var(--pencil); display: flex; justify-content: space-between; gap: .5rem }
+.op { font-weight: 600; font-size: 1.1rem; line-height: 1.4 }
+.maps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px }
+.maps canvas { width: 100%; outline: 1px solid var(--grid) }
+.kern { display: grid; grid-template-columns: repeat(4, 30px); gap: 6px }
+.big { font-size: 3rem; font-weight: 900; line-height: 1.1 }
+.bars { display: grid; grid-template-columns: 1.4rem minmax(0, 1fr) 3.6rem; gap: .2rem .5rem; align-items: center; font-size: .82rem; line-height: 1.2 }
+.bars .track { position: relative; height: .8rem }
+.bars i { position: absolute; top: 0; bottom: 0; left: 0; background: var(--ink) }
+.bars i.neg { background: var(--red) }
+.bars.signed .track { border-left: 0; background: linear-gradient(var(--pencil), var(--pencil)) 50% 0 / 1px 100% no-repeat }
+.bars .v { text-align: right }
+.bars .mark { color: var(--red); font-weight: 900; text-align: center; outline: 1.5px solid var(--red); border-radius: 50% }
+#cap3 { font-family: var(--kai); font-size: 1.08rem; max-width: 38em }
+#cap3 b { font-family: var(--serif); font-size: .95rem }
+#cap3 .small { display: block; margin-top: .4rem; font-family: var(--serif) }
+@keyframes draw { from { clip-path: inset(0 0 100% 0) } to { clip-path: inset(0 0 0 0) } }
+@media (prefers-reduced-motion: no-preference) { .draw { animation: draw .7s ease-out } }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="3"/><feDisplacementMap in="SourceGraphic" scale="2.5"/></filter></svg>
+
+<div class="page">
+  <header>
+    <p class="src">实验记录 · pytorch/examples · mnist/main.py</p>
+    <h1>一张手写数字，怎样变成一个答案</h1>
+    <p class="lede" id="lede"></p>
+  </header>
+
+  <figure>
+    <div class="scroll"><svg id="chart" viewBox="0 0 720 200" role="img" aria-label="训练损失曲线"></svg></div>
+    <div class="row"><label for="ck">训练进度</label><input type="range" id="ck" min="0" step="1"><output id="ckout" for="ck"></output></div>
+    <figcaption><b>图 1　训练中的损失。</b>折线是训练时每一批（64 张图）的损失。圆点是存下来的几个时刻，拖动滑块可以把模型退回到那一刻，下面两张图会跟着变。</figcaption>
+  </figure>
+
+  <figure>
+    <div class="row" id="samples" role="group" aria-label="选一张图"></div>
+    <p class="verdict" id="verdict"></p>
+    <div class="strip" id="strip"></div>
+    <div class="row"><button id="play"></button><button id="prev">← 上一步</button><button id="next">下一步 →</button><input type="range" id="step" min="0" step="1" aria-label="当前步骤"></div>
+    <figcaption><b>图 2　数据走过的路。</b>从左到右是这张图依次经过的每一步，小图是它在那一步的样子。红框是数据现在所在的位置，颜色淡的是还没走到的。按“播放”从头看一遍，也可以直接点任意一步。</figcaption>
+  </figure>
+
+  <figure>
+    <div class="detail inked" id="detail"></div>
+    <figcaption id="cap3"></figcaption>
+  </figure>
+</div>
+
+<script type="application/json" id="data">__DATA__</script>
+<script>
+const D = JSON.parse(document.getElementById('data').textContent);
+const S = { ck: D.ckpts.length - 1, sm: 0, step: 1 };
+const INK = [27, 42, 65], RED = [200, 55, 45], N = D.losses.length;
+const OFF = { c1: [0, 5408], c2: [5408, 4608], pool: [10016, 1152], fc1: [11168, 128], sal: [11296, 784] };
+
+const $ = id => document.getElementById(id);
+const el = (tag, cls, ...kids) => { const e = document.createElement(tag); if (cls) e.className = cls; e.append(...kids.flat(3).filter(k => k != null)); return e; };
+const bytes = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const T = () => D.traces[S.ck][S.sm], SM = () => D.samples[S.sm];
+const part = (t, k) => (t._b ??= bytes(t.b)).subarray(OFF[k][0], OFF[k][0] + OFF[k][1]);
+const pix = () => (SM()._p ??= bytes(SM().pix));
+const pct = v => v < 0.001 ? '不到 0.1%' : (v * 100).toFixed(1) + '%';
+const argmax = a => a.indexOf(Math.max(...a));
+const small = s => el('p', 'small', s);
+
+// values -255..255 -> ink (positive) or red (negative), strength as opacity
+function cv(b, w, h, k) {
+  const c = el('canvas'); c.width = w; c.height = h; if (k) c.style.width = w * k + 'px';
+  const x = c.getContext('2d'), im = x.createImageData(w, h);
+  for (let i = 0; i < w * h; i++) im.data.set([...(b[i] < 0 ? RED : INK), Math.min(255, Math.abs(b[i]))], i * 4);
+  x.putImageData(im, 0, 0); return c;
+}
+function maps(b, w, h, k) {
+  const g = el('div', 'maps'); g.style.maxWidth = 4 * w * k + 18 + 'px';
+  for (let i = 0; i < b.length / (w * h); i++) g.append(cv(b.subarray(i * w * h, (i + 1) * w * h), w, h));
+  return g;
+}
+function kernels(k1) {
+  const m = Math.max(...k1.map(Math.abs)) || 1, g = el('div', 'kern');
+  for (let i = 0; i < k1.length; i += 9) g.append(cv(k1.slice(i, i + 9).map(v => v / m * 255), 3, 3, 10));
+  return g;
+}
+function bars(vals, signed, mark) {
+  const max = Math.max(...vals.map(Math.abs)) || 1, g = el('div', 'bars' + (signed ? ' signed' : ''));
+  vals.forEach((v, i) => {
+    const b = el('i', v < 0 ? 'neg' : '');
+    b.style.width = Math.abs(v) / max * (signed ? 50 : 100) + '%';
+    if (signed) { b.style.left = v < 0 ? 'auto' : '50%'; if (v < 0) b.style.right = '50%'; }
+    g.append(el('span', i === mark ? 'mark' : '', String(i)), el('span', 'track', b), el('span', 'v', signed ? v.toFixed(2) : pct(v)));
+  });
+  return g;
+}
+function mini(vals) {
+  const c = el('canvas'); c.width = 50; c.height = 30; c.style.width = '50px';
+  const x = c.getContext('2d'), m = Math.max(...vals.map(Math.abs)) || 1;
+  vals.forEach((v, i) => { const hh = Math.max(1, Math.abs(v) / m * 30); x.fillStyle = `rgb(${v < 0 ? RED : INK})`; x.fillRect(i * 5, 30 - hh, 4, hh); });
+  return c;
+}
+
+const ST = [
+  { name: '输入图像', shape: '1×28×28', op: '标准化',
+    thumb: () => cv(pix(), 28, 28, 2), data: () => cv(pix(), 28, 28, 6),
+    mid: () => ['（像素 − 0.1307）÷ 0.3081', small('0.1307 和 0.3081 是整个训练集的平均亮度和标准差。这样处理后，数值大致以 0 为中心。')],
+    extra: t => [small('↑ 送进网络的图。墨色越深，像素越亮。'), cv(part(t, 'sal'), 28, 28, 6), small('↑ 反向传播的终点：损失对每个像素的梯度。越深，说明这个像素一变，损失变得越多。')],
+    note: () => `这是 MNIST 测试集的第 ${SM().idx} 张图，人工标注是“${SM().label}”。它是一个 28×28 的格子，每格一个亮度值，一共 784 个数。` },
+  { name: '卷积 1', shape: '32×26×26', op: '3×3 卷积，再 ReLU',
+    thumb: t => cv(part(t, 'c1'), 26, 26, 2), data: t => maps(part(t, 'c1'), 26, 26, 3),
+    mid: () => [kernels(D.ckpts[S.ck].k1), small('右边 8 张图各自用的卷积核，此刻的权重。蓝黑为正，红为负。')],
+    note: t => `32 个 3×3 的卷积核各自从左上扫到右下，每个位置算一次加权和，得到 32 张 26×26 的特征图，这里画出其中 8 张。ReLU 再把负数清零：这张图的全部输出里有 ${pct(t.zero[0])} 是 0。` },
+  { name: '卷积 2', shape: '64×24×24', op: '3×3 卷积，再 ReLU',
+    thumb: t => cv(part(t, 'c2'), 24, 24, 2), data: t => maps(part(t, 'c2'), 24, 24, 3),
+    mid: () => [small('每个卷积核有 32×3×3 = 288 个权重，同时看上一步的全部 32 张图，所以这里不画出来。')],
+    note: t => `64 个卷积核，每个位置综合上一步 32 张图里 3×3 范围的信息，得到 64 张 24×24 的特征图（画出 8 张）。ReLU 之后有 ${pct(t.zero[1])} 是 0，留下的响应比上一步更稀疏。` },
+  { name: '最大池化', shape: '64×12×12', op: '每 2×2 取最大值',
+    thumb: t => cv(part(t, 'pool'), 12, 12, 4), data: t => maps(part(t, 'pool'), 12, 12, 6),
+    mid: () => [small('没有可学习的权重。接下来的 Dropout 只在训练时随机丢弃一部分数，推理时原样通过，所以不单独画。')],
+    note: () => '每 2×2 个格子只留下最大的那个数，24×24 变成 12×12。数据量减到四分之一，最强的响应都还在，图案看上去只是变粗了。' },
+  { name: '全连接 1', shape: '128', op: '展平，全连接，再 ReLU',
+    thumb: t => cv(part(t, 'fc1'), 16, 8, 3), data: t => cv(part(t, 'fc1'), 16, 8, 14),
+    mid: () => ['9216 → 128', small('这一层有 9216×128 ≈ 118 万个权重，占了整个网络参数的绝大部分。')],
+    note: t => `64×12×12 = 9216 个数先排成一排，全连接层再把它们压成 128 个数，这里画成 8×16 的格子。从这一步起，数据不再保留“图”的形状。经过 ReLU，这张图只有 ${t.nz} 个数不为 0。` },
+  { name: '全连接 2', shape: '10', op: '给每个数字打分',
+    thumb: t => mini(t.logits), data: t => bars(t.logits, true, SM().label),
+    mid: () => ['128 → 10', small('红圈标出的是正确答案。分数可正可负，只有相对大小有意义。')],
+    note: t => { const a = argmax(t.logits); return `128 个数被压成 10 个分数，每个数字一个。这张图分数最高的是“${a}”，得了 ${t.logits[a].toFixed(2)} 分；正确答案“${SM().label}”得了 ${t.logits[SM().label].toFixed(2)} 分。`; } },
+  { name: 'Softmax', shape: '10', op: '把分数变成概率',
+    thumb: t => mini(t.probs), data: t => bars(t.probs, false, SM().label),
+    mid: () => ['e^分数 ÷ 所有 e^分数之和', small('分数差几分，概率就会差很多倍，所以最高分通常拿走大部分概率。')],
+    note: t => { const a = argmax(t.probs); return `10 个分数换成加起来等于 1 的概率。模型认为这张图是“${a}”，把握 ${pct(t.probs[a])}；正确答案“${SM().label}”得到 ${pct(t.probs[SM().label])}。`; } },
+  { name: '损失', shape: '1 个数', op: '交叉熵',
+    thumb: t => el('span', '', t.loss.toFixed(2)), data: t => el('div', 'big', t.loss.toFixed(3)),
+    mid: () => ['−ln（正确答案的概率）', small('训练时，这个数沿原路往回传，得到每个权重的梯度，再按梯度把权重改一点，让它变小。')],
+    note: t => { const p = Math.exp(-t.loss); return `损失只看正确答案拿到的概率：−ln(${p < 0.01 ? p.toExponential(2) : p.toFixed(4)}) = ${t.loss.toFixed(3)}。概率越接近 1，损失越接近 0。${argmax(t.probs) === SM().label ? '这次模型答对了。' : '这次模型答错了，所以损失很大。'}`; } },
+];
+
+function chart() {
+  const x = s => 36 + 674 * s / N, y = v => 10 + 166 * (1 - Math.min(v, 2.5) / 2.5), c = D.ckpts[S.ck];
+  const at = s => D.losses[Math.min(s, N - 1)];
+  $('chart').innerHTML =
+    [0, 1, 2].map(v => `<line x1="36" x2="710" y1="${y(v)}" y2="${y(v)}" stroke="#6f7782" stroke-width=".5" stroke-dasharray="${v ? '2 4' : ''}"/><text x="28" y="${y(v) + 4}" text-anchor="end">${v}</text>`).join('') +
+    [0, 200, 400, 600, 800].map(s => `<text x="${x(s)}" y="194" text-anchor="middle">${s}</text>`).join('') + `<text x="710" y="194" text-anchor="end">训练步数</text>` +
+    `<path d="M${D.losses.map((v, i) => `${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join('L')}" fill="none" stroke="#1b2a41" stroke-width="1"/>` +
+    `<line x1="${x(c.step)}" x2="${x(c.step)}" y1="10" y2="176" stroke="#c8372d" stroke-dasharray="4 3"/>` +
+    D.ckpts.map((k, i) => `<circle class="dot" data-ck="${i}" cx="${x(k.step)}" cy="${y(at(k.step))}" r="5.5" fill="${i === S.ck ? '#c8372d' : '#f7f6f1'}" stroke="${i === S.ck ? '#c8372d' : '#1b2a41'}" stroke-width="1.5"/>`).join('');
+  $('ckout').textContent = (c.step ? `第 ${c.step} 步，共 ${N} 步` : '第 0 步，还没开始训练') + ` · 此刻测试准确率 ${(c.acc * 100).toFixed(1)}%`;
+}
+function samples() {
+  $('samples').replaceChildren(el('span', '', '选一张图'), ...D.samples.map((s, i) => {
+    const b = el('button', 'pick', cv(s._p ??= bytes(s.pix), 28, 28, 2), i === D.samples.length - 1 ? `标注 ${s.label} · 最难的一张` : `标注 ${s.label}`);
+    b.setAttribute('aria-pressed', i === S.sm); b.onclick = () => { S.sm = i; render(); }; return b;
+  }));
+}
+function strip() {
+  const t = T(), a = argmax(t.probs), ok = a === SM().label;
+  $('verdict').replaceChildren('模型的答案 ', el('b', '', a + (ok ? ' ✓' : ' ✗')), `　把握 ${pct(t.probs[a])}　正确答案 ${SM().label}　损失 ${t.loss.toFixed(3)}`);
+  $('strip').replaceChildren(...ST.map((st, i) => {
+    const b = el('button', 'st ' + (i === S.step ? 'now' : i < S.step ? 'done' : 'todo'), el('span', 'thumb inked', st.thumb(t)), el('span', '', st.name), el('span', 'shape', st.shape));
+    b.onclick = () => go(i); return b;
+  }));
+  $('step').value = S.step; $('prev').disabled = !S.step; $('next').disabled = S.step === ST.length - 1;
+  $('play').textContent = timer ? '⏸ 暂停' : S.step === ST.length - 1 ? '↻ 重播' : '▶ 播放';
+}
+function detail(anim) {
+  const t = T(), i = S.step, st = ST[i], g = t.gn[i];
+  const col = (title, shape, ...body) => el('div', 'col', el('h3', '', el('span', '', title), el('span', '', shape)), body);
+  $('detail').replaceChildren(
+    col('进来', i ? ST[i - 1].shape : '', i ? ST[i - 1].data(t) : small('原始图片：每个像素是 0 到 255 的灰度。')),
+    col('这一步', '', el('div', 'op', st.op), st.mid(t)),
+    col('出去', st.shape, el('div', anim ? 'draw' : '', st.data(t)), st.extra?.(t)));
+  $('cap3').replaceChildren(el('b', '', `图 3　第 ${i + 1} 步，共 ${ST.length} 步：${st.name}。`), st.note(t),
+    g == null ? null : el('span', 'small', `反向传播回到这一步的输出时，梯度的大小（范数）是 ${g >= 0.001 ? g.toFixed(4) : g.toExponential(1)}。`));
+}
+function render(anim) { chart(); samples(); strip(); detail(anim); }
+
+let timer = 0;
+function stop() { clearInterval(timer); timer = 0; }
+function go(i) { stop(); S.step = Math.max(0, Math.min(ST.length - 1, i)); render(true); }
+function play() {
+  if (timer) { stop(); return strip(); }
+  if (S.step === ST.length - 1) S.step = 0;
+  timer = setInterval(() => { if (S.step === ST.length - 2) stop(); S.step++; render(true); }, 1800);
+  render(true);
+}
+
+$('lede').textContent = `网络来自 PyTorch 官方示例：两层卷积、一次池化、两层全连接，共 ${D.params.toLocaleString('en')} 个参数。训练一轮（${N} 步）之后，测试集 ${D.tests} 张图答对了 ${(D.ckpts.at(-1).acc * 100).toFixed(1)}%。下面跟着一张图走一遍，看它在每一步变成了什么。`;
+$('ck').max = D.ckpts.length - 1; $('ck').value = S.ck; $('step').max = ST.length - 1;
+$('ck').oninput = e => { S.ck = +e.target.value; render(); };
+$('step').oninput = e => go(+e.target.value);
+$('chart').onclick = e => { const k = e.target.dataset?.ck; if (k != null) { S.ck = +k; $('ck').value = k; render(); } };
+$('play').onclick = play; $('prev').onclick = () => go(S.step - 1); $('next').onclick = () => go(S.step + 1);
+addEventListener('keydown', e => {
+  if (e.target.matches('input, button')) return;
+  if (e.key === 'ArrowRight') go(S.step + 1); else if (e.key === 'ArrowLeft') go(S.step - 1); else if (e.key === ' ') { e.preventDefault(); play(); }
+});
+render();
+</script>
