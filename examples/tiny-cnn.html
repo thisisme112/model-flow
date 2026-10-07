@@ -496,8 +496,14 @@ function figureSvg() {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.ceil(base.width)}" height="${Math.ceil(base.height)}" viewBox="0 0 ${Math.ceil(base.width)} ${Math.ceil(base.height)}">` +
     `<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 1L10 5L0 9z" fill="${ink}"/></marker></defs>${out.join('')}</svg>`;
 }
-$('export').onclick = () => {
-  const a = el('a'); a.href = URL.createObjectURL(new Blob([figureSvg()], { type: 'image/svg+xml' })); a.download = (SPEC.title || 'model-flow') + '.svg';
+// A page published on claude.ai may not start a download itself: there the viewer's `downloads` capability saves the
+// file after asking, and where that is missing too the button goes. Opened as a file, a plain download link does it.
+const saver = window.claude ? window.claude.use('downloads') : null;
+saver?.then(d => { if (!d) $('export').hidden = true; });
+$('export').onclick = async () => {
+  const filename = (SPEC.title || 'model-flow').replace(/[\\/:*?"<>|]/g, ' ') + '.svg', data = figureSvg(), d = await saver;
+  if (d) return d.save({ filename, data }).catch(() => {});   // the viewer may say no
+  const a = el('a'); a.href = URL.createObjectURL(new Blob([data], { type: 'image/svg+xml' })); a.download = filename;
   a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
 
