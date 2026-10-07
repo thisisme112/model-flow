@@ -60,10 +60,11 @@ near miss). Never invent numbers.
   directly (a position table) is an input. `nest(leaves, model)` groups the leaves by module call; usually you
   regroup by hand into the levels from step 2. `examples/mnist_spec.py` is the whole pattern.
 - **fx cannot trace it** (data-dependent control flow, most Hugging Face models): `trace` says so and falls
-  back to forward hooks on its own. The steps are then the innermost module calls and the edges come from the
-  autograd graph, so an op between two modules (the `+` of a residual, a softmax) has no box; say what it does
-  in the note of the step that follows. Pass `hooks=True` to go straight there, which also opens `torch.nn`
-  containers that fx keeps as one step (`nn.TransformerEncoder`).
+  back to forward hooks on its own. The steps are then the innermost module calls, plus one for every tensor
+  that plain functions computed in between and a module then reads (a residual `+`, a softmax): that step is
+  named after the last function, so several functions in a row share one box; rename it and say in its note
+  what they did together. Edges come from the autograd graph. Pass `hooks=True` to go straight there, which
+  also opens `torch.nn` containers that fx keeps as one step (`nn.TransformerEncoder`).
 - **Several stages of one model** (during training, before and after fine-tuning): trace the same sample through
   each set of weights, turn each trace into `variant(name, leaves, example=…)`, and list them under
   `variants`. The page gets one more slider. `examples/mnist_spec.py` does this for five moments of an epoch.
@@ -137,4 +138,6 @@ Keep it light: `fxtrace.tensor` keeps at most 8 channels of 32×32 and vectors u
   with different steps, build two pages.
 - Tree order is playback order, so it must be execution order. Branches play one lane after the other.
 - On the hook path a parameter that `forward` uses directly has no input box, and the gradient shown for a
-  tensor that is later changed in place by a function (not a module) is that of the changed tensor.
+  tensor that is later changed in place by a function (not a module) is that of the changed tensor. A tensor
+  that only functions touch and a module merely returns (attention weights) is not a step: fetch it in the
+  glue and attach it as `also`, as `examples/gpt2_spec.py` does.

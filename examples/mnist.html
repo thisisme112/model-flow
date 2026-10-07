@@ -239,8 +239,9 @@ function thumb(t) {
   const max = absmax(d), s = t.shape?.length ? t.shape : [d.length];
   if (s.length < 2) { if (d.length <= 16) return miniBars(d, max); const strip = cv(d, 1, d.length, max, 12); strip.style.height = '46px'; return strip; }
   const W = s.at(-1), H = s.at(-2), n = H * W, C = Math.min(3, d.length / n), k = 40 / Math.max(H, W), box = el('span', 'stack');
-  box.style.width = W * k + (C - 1) * 6 + 'px'; box.style.height = H * k + (C - 1) * 6 + 'px';
-  for (let c = C - 1; c >= 0; c--) { const m = cv(d.slice(c * n, (c + 1) * n), W, H, max, W * k); m.style.left = c * 6 + 'px'; m.style.top = (C - 1 - c) * 6 + 'px'; box.append(m); }
+  const hh = H * k < 14 ? Math.min(40, H * 5) : H * k;     // a few long rows (the positions of a short sequence): taller, so the rows can be told apart
+  box.style.width = W * k + (C - 1) * 6 + 'px'; box.style.height = hh + (C - 1) * 6 + 'px';
+  for (let c = C - 1; c >= 0; c--) { const m = cv(d.slice(c * n, (c + 1) * n), W, H, max, W * k); m.style.height = hh + 'px'; m.style.left = c * 6 + 'px'; m.style.top = (C - 1 - c) * 6 + 'px'; box.append(m); }
   return box;
 }
 function bars(t, max) {
@@ -269,7 +270,7 @@ function viz(t) {
   const W = s.at(-1), H = s.at(-2), n = H * W, C = Math.min(16, d.length / n), ch = c => d.slice(c * n, (c + 1) * n), idx = [...Array(C).keys()];
   if (H <= 10 && W <= 10 && C <= 2) return el('div', 'maps', idx.map(c => ngrid(ch(c), W, max)));
   const k = Math.max(2, Math.floor((C === 1 ? 170 : 76) / Math.max(H, W)));
-  return el('div', 'maps', idx.map(c => cv(ch(c), W, H, max, W * k)));
+  return el('div', 'maps', idx.map(c => { const m = cv(ch(c), W, H, max, W * k); if (W > 3 * H) m.style.height = H * Math.max(k, 12) + 'px'; return m; }));
 }
 
 // ---- DOM: the browser's own inline layout places everything; build() only decides order and nesting
@@ -351,6 +352,7 @@ function wire() {
   const rowEnd = (e, o, s) => Math[s < 0 ? 'min' : 'max'](o.cy + (s < 0 ? -o.nt : o.nb), ...boxes.filter(x => x.flow === flowOf(e) && x.t < o.cy && x.b > o.cy).map(x => s < 0 ? x.t - 6 : x.b + 6));
   const hits = (x, y0, y1) => nodes.some(e => { const o = box.get(e); return o.l - 3 < x && x < o.r + 3 && o.t < y1 && o.b > y0; });
   const free = (x0, x1, y) => !nodes.some(e => { const o = box.get(e); return Math.abs(o.cy - y) < 4 && o.l >= x0 && o.r <= x1; });   // no step on this row between x0 and x1
+  const clear = (x0, x1, y) => !nodes.some(e => { const o = box.get(e); return o.l < x1 && o.r > x0 && o.t < y && o.b > y; });         // no step of any row touches the line y from x0 to x1
   let lane = 0;
   const paths = G.wires.map(w => {
     const A = box.get(w.a), B = box.get(w.b), ia = nodes.indexOf(w.a), ib = nodes.indexOf(w.b), between = nodes.slice(Math.min(ia, ib) + 1, Math.max(ia, ib));
@@ -363,6 +365,8 @@ function wire() {
       const [x] = out.at(-1), below = rowEnd(PA || w.a, a || A, 1), y = rowEnd(PB || w.b, b || B, -1);   // y: the gap above the row we are going to
       if (b && A.cy > b.t && A.cy < b.b && A.r <= b.l && free(A.r, b.l, A.cy)) w.d = rounded([[A.r, A.cy], [b.l + 8, A.cy], ...into]);            // a fork: straight in from the left
       else if (a && !b && B.cy > a.t && B.cy < a.b && B.l >= a.r && free(a.r, B.l, B.cy)) w.d = rounded([...out, [x, B.cy], [B.l, B.cy]]);        // a join: straight out to the right
+      else if (B.l - 10 > A.r && clear(A.r, B.l - 10, A.cy) && !hits(B.l - 10, Math.min(A.cy, B.cy), Math.max(A.cy, B.cy)))                         // to the right with nothing between (out of a box, say): one bend
+        w.d = rounded([[A.r, A.cy], [B.l - 10, A.cy], [B.l - 10, B.cy], [B.l, B.cy]]);
       else if (y > below + 2 && hits(x, below, y)) {       // rows in between, and something in the way: go round by the right edge
         const edge = rel(flowOf(w.a)).r - 3;
         w.d = rounded([...out, [x, below], [edge, below], [edge, y], [into[0][0], y], ...into]);
