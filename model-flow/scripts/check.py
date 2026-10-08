@@ -1,4 +1,4 @@
-"""python check.py page.html [--shots DIR] [--levels 1,3] — read a built page back in a headless browser.
+"""python check.py page.html [--shots DIR] [--levels 1,3] [--theme light|dark] — read a built page back in a headless browser.
 
 For desktop width (1280) and phone width (375) it prints what the page's own flowCheckAll() found at every level:
 an arrow through a box, hugging one, lying on an unrelated arrow, or missing its target; and any script error.
@@ -67,6 +67,7 @@ def main():
     ap.add_argument("page")
     ap.add_argument("--shots", metavar="DIR", help="save a screenshot of every level here")
     ap.add_argument("--levels", help="only these levels for --shots, e.g. 1,3")
+    ap.add_argument("--theme", choices=("light", "dark"), help="the look for --shots (default: the system's)")
     a = ap.parse_args()
     exe, page = browser(), pathlib.Path(a.page).resolve()
     if not exe:
@@ -102,7 +103,7 @@ def main():
             if want is None or v["level"] in want:
                 out = os.path.join(os.path.abspath(a.shots), f"{page.stem}-L{v['level']}.png")
                 # ponytail: one tall window, capped at 6000px; a taller level is cut off at the bottom
-                visit(exe, f"{url}#level-{v['level']}", 1280, min(v["height"] + 20, 6000), out)
+                visit(exe, f"{url}#level-{v['level']}" + (f".{a.theme}" if a.theme else ""), 1280, min(v["height"] + 20, 6000), out)
                 print(f"shot {out}" if os.path.exists(out) else f"no screenshot for level {v['level']}")
     return 1 if bad else 0
 

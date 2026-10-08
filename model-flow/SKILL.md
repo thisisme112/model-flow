@@ -13,7 +13,7 @@ exports the figure as SVG.
 
 One method covers every project: **a tree of steps, edges between them, and one example traced through.**
 
-- The tree gives the detail levels. Closed, a module is one box; open, it is a dashed frame around its parts.
+- The tree gives the detail levels. Closed, a module is one box; open, it is a labelled frame around its parts.
 - The edges give the arrows, including branches and skip connections.
 - The example gives every arrow a real piece of data to draw.
 

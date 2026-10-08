@@ -4,55 +4,57 @@
 <title>TinyCNN 数据流</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;900&display=swap">
 <style>
-/* Layout: one framework figure across the page — boxes are operations, the small pictures between them are data.
+/* Layout: one framework figure across the page — boxes are operations, the small pictures in them are data.
    Controls sit above it; the current step's input / operation / output is spelled out below.
-   Two looks from one set of tokens: a notebook page, and the same notebook at night. The page follows the viewer's
-   setting (prefers-color-scheme, or data-theme on the root where a host sets it); the button on the page overrides it.
+   Legibility first: plain surfaces, crisp lines, three weights of line (arrows strongest, box edges, module
+   frames faintest), one sans face for everything but the title.
+   Two looks from one set of tokens, light and dark. The page follows the viewer's setting (prefers-color-scheme, or
+   data-theme on the root where a host sets it); the button on the page overrides it.
    --ink and --red must stay six-digit hex: the pictures of tensors are painted from them. */
 :root { color-scheme: light;
-  --paper: #f7f6f1; --grid: #e4e9ee; --ink: #1b2a41; --pencil: #6f7782; --red: #c8372d; --tint: rgba(27, 42, 65, .035);
+  --paper: #f4f3ef; --sheet: #fbfbf9; --card: #ffffff; --line: #d6dae0; --edge: #56616f; --grid: #e6e9ed;
+  --ink: #1b2a41; --pencil: #5b6470; --red: #c8372d; --tint: rgba(27, 42, 65, .04);
   --k-conv: #d6e4f5; --k-pool: #d5ecdb; --k-dense: #e5dbf3; --k-act: #f7eabb; --k-norm: #e9e5da; --k-attn: #f8d8cf;
-  --k-shape: #e0e3e6; --k-loss: #f5cfca; --k-group: #fdfcf8; --k-other: #fdfcf8;
+  --k-shape: #e0e3e6; --k-loss: #f5cfca; --k-group: #eef0f2; --k-other: #eef0f2;
   --serif: "Noto Serif SC", "Songti SC", "SimSun", serif;
-  --kai: "LXGW WenKai", "KaiTi", "STKaiti", "Kaiti SC", "Noto Serif SC", serif;
+  --sans: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   --mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark;
-  --paper: #151a21; --grid: #202832; --ink: #e8ecf1; --pencil: #93a0b0; --red: #ff8272; --tint: rgba(232, 236, 241, .045);
-  --k-conv: #20385a; --k-pool: #1f4030; --k-dense: #3a2c59; --k-act: #524714; --k-norm: #3a372f; --k-attn: #55291f;
-  --k-shape: #2f353d; --k-loss: #552621; --k-group: #1c222b; --k-other: #1c222b } }
+  --paper: #0f1318; --sheet: #161b22; --card: #1e242d; --line: #2c3541; --edge: #6b7a8f; --grid: #27303b;
+  --ink: #e9edf2; --pencil: #9ca9b8; --red: #ff8272; --tint: rgba(233, 237, 242, .04);
+  --k-conv: #25426b; --k-pool: #234a36; --k-dense: #40306a; --k-act: #5a4d14; --k-norm: #403c32; --k-attn: #5f2c21;
+  --k-shape: #343b45; --k-loss: #5f2a24; --k-group: #2a323d; --k-other: #2a323d } }
 :root[data-theme="dark"] { color-scheme: dark;
-  --paper: #151a21; --grid: #202832; --ink: #e8ecf1; --pencil: #93a0b0; --red: #ff8272; --tint: rgba(232, 236, 241, .045);
-  --k-conv: #20385a; --k-pool: #1f4030; --k-dense: #3a2c59; --k-act: #524714; --k-norm: #3a372f; --k-attn: #55291f;
-  --k-shape: #2f353d; --k-loss: #552621; --k-group: #1c222b; --k-other: #1c222b }
+  --paper: #0f1318; --sheet: #161b22; --card: #1e242d; --line: #2c3541; --edge: #6b7a8f; --grid: #27303b;
+  --ink: #e9edf2; --pencil: #9ca9b8; --red: #ff8272; --tint: rgba(233, 237, 242, .04);
+  --k-conv: #25426b; --k-pool: #234a36; --k-dense: #40306a; --k-act: #5a4d14; --k-norm: #403c32; --k-attn: #5f2c21;
+  --k-shape: #343b45; --k-loss: #5f2a24; --k-group: #2a323d; --k-other: #2a323d }
 * { box-sizing: border-box }
-body { margin: 0; color: var(--ink); font: 16px/1.75 var(--serif); font-variant-numeric: tabular-nums; padding-block: 2rem 4rem; padding-inline: 16px;
-  background: linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 100% 24px, linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 24px 100%, var(--paper) }
-.page { max-width: 82rem; margin-inline: auto; display: grid; gap: 1.5rem; grid-template-columns: minmax(0, 1fr) }
-h1 { font-weight: 900; font-size: clamp(1.6rem, 4vw, 2.3rem); line-height: 1.25; margin: 0; text-wrap: balance }
+body { margin: 0; color: var(--ink); background: var(--paper); font: 15px/1.7 var(--sans); font-variant-numeric: tabular-nums; padding-block: 2rem 4rem; padding-inline: 16px }
+.page { max-width: 82rem; margin-inline: auto; display: grid; gap: 1.25rem; grid-template-columns: minmax(0, 1fr) }
+h1 { font: 900 clamp(1.6rem, 4vw, 2.2rem)/1.25 var(--serif); margin: 0; text-wrap: balance }
 h2 { font-weight: 600; font-size: 1.25rem; line-height: 1.3; margin: 0; overflow-wrap: anywhere }
 p { margin: 0 }
-.src { font-size: .8rem; letter-spacing: .12em; color: var(--pencil) }
-.lede { max-width: 40em; margin-top: .5rem }
-.small { font-size: .8rem; color: var(--pencil); line-height: 1.5 }
-.mono { font-family: var(--mono); font-size: .78rem }
-button { font: inherit; color: var(--ink); background: var(--paper); border: 1.5px solid var(--ink); border-radius: 2px; padding: .1rem .75rem; cursor: pointer }
-button:disabled { color: var(--pencil); border-color: var(--pencil); cursor: default }
+.src { font-size: .8rem; letter-spacing: .08em; color: var(--pencil) }
+.lede { max-width: 44em; margin-top: .5rem }
+.small { font-size: .82rem; color: var(--pencil); line-height: 1.5 }
+.mono { font-family: var(--mono); font-size: .8rem }
+button { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--edge); border-radius: 6px; padding: .15rem .8rem; cursor: pointer }
+button:disabled { color: var(--pencil); border-color: var(--line); cursor: default }
 :focus-visible { outline: 2px solid var(--red); outline-offset: 2px }
 input[type=range] { accent-color: var(--red) }
 canvas, img { image-rendering: pixelated; display: block; max-width: 100%; height: auto }
 
-.bar { display: flex; flex-wrap: wrap; gap: .8rem 2.5rem; align-items: center }
-.ctl { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .6rem; font-size: .9rem }
+.bar { display: flex; flex-wrap: wrap; gap: .7rem 2rem; align-items: center }
+.ctl { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .6rem; font-size: .92rem }
 .ctl label { font-weight: 600 }
+.ctl.side { margin-left: auto }
+.ctl.side button { border-color: var(--line); color: var(--pencil); font-size: .85rem }
 [hidden] { display: none !important }
 #level, #variant { width: 8rem }
 #step { width: 10rem }
-#play { background: var(--ink); color: var(--paper); min-width: 5.4rem }
-
-/* hand-inked outline on a pseudo-element, so the contents stay sharp */
-.inked { position: relative }
-.inked::before, .card::before { content: ""; position: absolute; inset: 0; border: 1.5px solid var(--ink); border-radius: 4px; filter: url(#rough); pointer-events: none }
+#play { background: var(--ink); border-color: var(--ink); color: var(--paper); min-width: 5.4rem }
 
 /* The figure is laid out like text: steps are inline boxes that wrap at the page edge, and a module is an inline
    span around its steps, so a module that does not fit on one row carries on in the next with its frame left open.
@@ -62,70 +64,69 @@ canvas, img { image-rendering: pixelated; display: block; max-width: 100%; heigh
    Two things are boxes instead of text, so they make only their own row taller: .par, a set of branches (lanes one
    under the other, with a gutter left and right for the arrows in and out), and .box, a module with branches inside it.
    Every lane and every .box is a small figure of its own: its own rows, its own --nt / --nb. */
-.wrap { overflow-x: auto; overflow-y: hidden }
+.wrap { overflow-x: auto; overflow-y: hidden; background: var(--sheet); border: 1px solid var(--line); border-radius: 12px; padding: 6px 10px }
 .stage { position: relative; font-size: 0; line-height: 0; padding-block: 10px }
 #wires { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none }
-.frame { position: relative; padding: calc(var(--up) - var(--shift)) 6px calc(var(--dn) + var(--shift)); border: 1.5px dashed var(--pencil); border-radius: 8px; background: var(--tint) }
+.frame { position: relative; padding: calc(var(--up) - var(--shift)) 6px calc(var(--dn) + var(--shift)); border: 1px solid var(--line); border-radius: 10px; background: var(--tint) }
 .par, .box { vertical-align: middle; max-width: calc(100% - 8px); margin: 6px 4px; text-align: left }
 .par { display: inline-flex; flex-direction: column; padding: 12px 16px 6px }
 .box { display: inline-block; padding: 10px 6px 4px }
 .lane { display: block }
-#wires .w { fill: none; stroke: var(--ink); stroke-width: 1.5; marker-end: url(#ah) }
-#wires .w[data-s=todo] { stroke: var(--pencil); opacity: .35; marker-end: url(#ah-todo) }
-#wires .w[data-s=now] { stroke: var(--red); stroke-width: 2; marker-end: url(#ah-now) }
-.glabel { position: absolute; left: 8px; top: 0; transform: translateY(-50%); background: var(--paper); border: 0; padding: 0 .4rem; font: 600 12px/1.4 var(--serif); white-space: nowrap }
+#wires .w { fill: none; stroke: var(--ink); stroke-width: 1.6; marker-end: url(#ah) }
+#wires .w[data-s=todo] { stroke: var(--pencil); opacity: .4; marker-end: url(#ah-todo) }
+#wires .w[data-s=now] { stroke: var(--red); stroke-width: 2.2; marker-end: url(#ah-now) }
+.glabel { position: absolute; z-index: 1; left: 8px; top: 0; transform: translateY(-50%); background: var(--sheet); border: 1px solid var(--line); border-radius: 999px; padding: 0 .55rem; font: 600 12px/1.45 var(--sans); white-space: nowrap; color: var(--ink) }
 .glabel span { color: var(--pencil); font-weight: 400 }
-.card { position: relative; display: inline-block; vertical-align: middle; width: 84px; height: 106px; margin: calc(var(--nt) - 53px) 10px calc(var(--nb) - 53px); background: var(--paper); border-radius: 4px }
-.card.group { box-shadow: 5px 5px 0 -1px var(--paper), 5px 5px 0 0 var(--pencil) }
-.card .pick { width: 100%; height: 100%; display: grid; grid-template-rows: 34px 1fr auto; justify-items: center; align-items: center; border: 0; background: none; padding: 0 0 4px; font: 10px/1.2 var(--mono); color: var(--pencil) }
-.card .head { align-self: stretch; justify-self: stretch; display: grid; place-content: center; overflow: hidden; padding: 0 3px; background: var(--k); border-radius: 4px 4px 0 0; font: 600 12px/1.15 var(--serif); color: var(--ink); text-align: center; overflow-wrap: anywhere }
-.card .head small { display: block; font: 400 9.5px/1.25 var(--mono); color: var(--pencil) }
-.card .head.long { font-size: 10px; line-height: 1.1 }
+.card { position: relative; display: inline-block; vertical-align: middle; width: 92px; height: 106px; margin: calc(var(--nt) - 53px) 10px calc(var(--nb) - 53px); background: var(--card); border: 1.5px solid var(--edge); border-radius: 7px; overflow: visible }
+.card.group { box-shadow: 4px 4px 0 -1px var(--card), 4px 4px 0 0 var(--edge) }
+.card .pick { width: 100%; height: 100%; display: grid; grid-template-rows: 30px 1fr auto; justify-items: center; align-items: center; border: 0; border-radius: 0; background: none; padding: 0 0 5px; font: 11px/1.2 var(--mono); color: var(--pencil) }
+.card .head { align-self: stretch; justify-self: stretch; display: grid; place-content: center; overflow: hidden; padding: 0 4px; background: var(--k); border-radius: 5px 5px 0 0; font: 600 13px/1.15 var(--sans); color: var(--ink); text-align: center; overflow-wrap: anywhere }
+.card .head.long { font-size: 11px; line-height: 1.12 }
 .card.in .head { background: none }
-.card .exp { position: absolute; right: -9px; top: -9px; width: 20px; height: 20px; border-radius: 50%; padding: 0; display: grid; place-items: center; font: 600 13px/1 var(--mono) }
-.card[data-s=todo] { opacity: .28 }
-.card[data-s=now]::before { border-color: var(--red); border-width: 2.5px }
+.card .exp { position: absolute; right: -10px; top: -10px; width: 20px; height: 20px; border-radius: 50%; padding: 0; display: grid; place-items: center; font: 600 13px/1 var(--mono); background: var(--card) }
+.card[data-s=todo] { opacity: .35 }
+.card[data-s=now] { border-color: var(--red); box-shadow: 0 0 0 1.5px var(--red) }
+.card.group[data-s=now] { box-shadow: 0 0 0 1.5px var(--red), 5px 5px 0 0 var(--edge) }
 .card[data-s=now] .head { color: var(--red) }
-.thumb { width: 60px; height: 54px; display: grid; place-items: center }
-.thumb img { max-width: 56px; max-height: 56px; image-rendering: auto }
-.thumb .num { font: 600 17px var(--serif); color: var(--ink) }
-.thumb .tk { font-size: 10px; color: var(--ink); text-align: center; overflow-wrap: anywhere }
+.thumb { width: 72px; height: 58px; display: grid; place-items: center }
+.thumb img { max-width: 62px; max-height: 56px; image-rendering: auto; border-radius: 2px }
+.thumb .num { font: 700 19px var(--sans); color: var(--ink) }
+.thumb .tk { font: 11px/1.25 var(--mono); color: var(--ink); text-align: center; overflow-wrap: anywhere }
 .thumb .multi { display: flex; gap: 8px; align-items: center }
 .stack { position: relative }
-.stack canvas { position: absolute; background: var(--paper); outline: 1px solid var(--ink) }
+.stack canvas { position: absolute; background: var(--card); outline: 1px solid var(--edge) }
 .dot { position: absolute; left: 0; top: 0; width: 10px; height: 10px; border-radius: 50%; background: var(--red); opacity: 0; offset-rotate: 0deg; pointer-events: none }
 
-.legend { display: flex; flex-wrap: wrap; gap: .3rem 1.2rem; font-size: .8rem; color: var(--pencil) }
-.legend i { display: inline-block; width: .9rem; height: .9rem; margin-right: .35rem; vertical-align: -2px; border: 1px solid var(--ink); border-radius: 2px; background: var(--k) }
-figcaption, .cap { max-width: 42em; font-size: .95rem }
-figure { margin: 0; display: grid; gap: .6rem; min-width: 0 }
+.legend { display: flex; flex-wrap: wrap; gap: .3rem 1.2rem; font-size: .82rem; color: var(--pencil) }
+.legend i { display: inline-block; width: .9rem; height: .9rem; margin-right: .35rem; vertical-align: -2px; border: 1px solid var(--edge); border-radius: 3px; background: var(--k) }
+figure { margin: 0; display: grid; gap: .7rem; min-width: 0 }
+.how { font-size: .88rem; color: var(--pencil); max-width: 46em }
+.how summary { cursor: pointer; color: var(--ink); font-weight: 600; width: max-content }
 
-.detail { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: 1.2rem 0; padding: 1.2rem 0; background: color-mix(in srgb, var(--paper) 88%, transparent) }
-.col { padding: 0 1.2rem; display: grid; gap: .8rem; align-content: start; min-width: 0; border-left: 1px dashed var(--pencil) }
+.detail { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: 1.2rem 0; padding: 1.2rem 0; background: var(--sheet); border: 1px solid var(--line); border-radius: 12px }
+.col { padding: 0 1.2rem; display: grid; gap: .8rem; align-content: start; min-width: 0; border-left: 1px solid var(--line) }
 .col:first-child { border-left: 0 }
-.col h3 { margin: 0; font-size: .8rem; font-weight: 400; letter-spacing: .15em; color: var(--pencil) }
+.col h3 { margin: 0; font-size: .82rem; font-weight: 600; letter-spacing: .1em; color: var(--pencil) }
 .io { display: grid; gap: .4rem; min-width: 0 }
-.lab { display: flex; justify-content: space-between; gap: .6rem; font-size: .8rem; color: var(--pencil) }
+.lab { display: flex; justify-content: space-between; gap: .6rem; font-size: .85rem; color: var(--pencil) }
 .lab span:first-child { color: var(--ink); font-weight: 600 }
 .maps { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start }
-.maps canvas { outline: 1px solid var(--grid) }
+.maps canvas { outline: 1px solid var(--line) }
 .scroll { overflow-x: auto }
 .ngrid { display: grid; gap: 1px; width: max-content }
-.ngrid span { font: 10px/1.5 var(--mono); min-width: 2.2rem; padding: 0 .2rem; text-align: right; outline: 1px solid var(--grid) }
-.big { font-size: 2.6rem; font-weight: 900; line-height: 1.1 }
-.bars { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .2rem .5rem; align-items: center; font: .78rem/1.2 var(--mono) }
-.bars .track { position: relative; height: .8rem }
-.bars i { position: absolute; top: 0; bottom: 0; left: 0; background: var(--ink) }
+.ngrid span { font: 11px/1.5 var(--mono); min-width: 2.3rem; padding: 0 .2rem; text-align: right; outline: 1px solid var(--grid) }
+.big { font-size: 2.6rem; font-weight: 800; line-height: 1.1 }
+.bars { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .25rem .5rem; align-items: center; font: .82rem/1.2 var(--mono) }
+.bars .track { position: relative; height: .85rem }
+.bars i { position: absolute; top: 0; bottom: 0; left: 0; background: var(--ink); border-radius: 1px }
 .bars i.neg { background: var(--red) }
 .bars.signed .track { background: linear-gradient(var(--pencil), var(--pencil)) 50% 0 / 1px 100% no-repeat }
 .bars .v { text-align: right }
 .tokens { display: flex; flex-wrap: wrap; gap: .3rem }
-.tokens span { font: .8rem var(--mono); border: 1px solid var(--pencil); padding: 0 .4rem; border-radius: 3px }
-.cap { font-family: var(--kai); font-size: 1.08rem }
-.cap b { font-family: var(--serif); font-size: .95rem; font-weight: 600 }
+.tokens span { font: .82rem var(--mono); border: 1px solid var(--line); background: var(--card); padding: 0 .4rem; border-radius: 4px }
+.cap { max-width: 46em; font-size: 1rem }
+.cap b { font-weight: 700 }
 </style>
-
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="3"/><feDisplacementMap in="SourceGraphic" scale="2.5"/></filter></svg>
 
 <div class="page">
   <header>
@@ -138,14 +139,14 @@ figure { margin: 0; display: grid; gap: .6rem; min-width: 0 }
     <div class="ctl"><label for="level">详略</label><span>概括</span><input type="range" id="level" min="1" step="1"><span>详细</span><output id="lvl" for="level" class="small"></output></div>
     <div class="ctl"><button id="first" aria-label="回到起点">⏮</button><button id="prev">← 上一步</button><button id="play"></button><button id="next">下一步 →</button><input type="range" id="step" min="0" step="1" aria-label="当前步骤"><output id="pos" for="step" class="small"></output></div>
     <div class="ctl" id="vctl" hidden><label for="variant" id="vlab"></label><input type="range" id="variant" min="0" step="1"><output id="vname" for="variant" class="small"></output></div>
-    <div class="ctl"><button id="export">导出 SVG</button><button id="theme" aria-label="切换浅色和深色"></button></div>
+    <div class="ctl side"><button id="export">导出 SVG</button><button id="theme" aria-label="切换浅色和深色"></button></div>
   </section>
   <figure>
     <div class="wrap"><div class="stage" id="stage"></div></div>
     <div class="legend" id="legend"></div>
-    <figcaption><b>怎么读这张图。</b>从左到右、从上到下读。每个方框是一步处理：上面是名字，下面的小图是它输出的数据，最底下是数据的形状。虚线框是一个模块：点“−”把它收成一个方框，点“＋”再展开；一行放不下时会折到下一行，右边不封口表示还没完。红色是数据现在所在的位置，颜色淡的是还没走到的。</figcaption>
+    <details class="how"><summary>怎么读这张图</summary>从左到右、从上到下读。每个方框是一步处理：上面是名字（颜色表示它是哪一类运算），中间的小图是它输出的数据，最底下是数据的形状。带名字的浅色框是一个模块：点“−”把它收成一个方框，点“＋”再展开；一行放不下时会折到下一行，右边不封口表示还没完。红色是数据现在所在的位置，颜色淡的是还没走到的。鼠标停在方框上可以看到它在代码里的类型。</details>
   </figure>
-  <section class="detail inked" id="detail"></section>
+  <section class="detail" id="detail"></section>
   <p class="cap" id="cap"></p>
 </div>
 
@@ -161,7 +162,8 @@ const T = 1800, ROOT = document.documentElement;
 // the two colours tensors are painted in, read off the theme: [r, g, b] of --ink (positive) and --red (negative)
 let INK, RED;
 const inks = () => [INK, RED] = ['--ink', '--red'].map(k => getComputedStyle(ROOT).getPropertyValue(k).trim().match(/[0-9a-f]{2}/gi).map(h => parseInt(h, 16)));
-try { const t = localStorage.getItem('model-flow-theme'); if (t) ROOT.dataset.theme = t; } catch {}   // the look this reader chose last time
+// the look: what the link asks for (page.html#dark, #light), else what this reader chose last time, else the system's
+try { const t = (location.hash.match(/\b(light|dark)\b/) || [])[1] || localStorage.getItem('model-flow-theme'); if (t) ROOT.dataset.theme = t; } catch {}
 inks();
 const KINDS = [['loss', /loss|entropy/i, '损失'], ['attn', /attention|attn/i, '注意力'], ['conv', /conv/i, '卷积'], ['pool', /pool|sampl|interpolat/i, '池化 / 采样'],
   ['norm', /norm|dropout/i, '归一化 / Dropout'], ['act', /relu|gelu|silu|swish|sigmoid|tanh|softmax/i, '激活'], ['dense', /linear|dense|embed|matmul|bmm/i, '全连接 / 嵌入'],
@@ -213,7 +215,7 @@ const kindOf = n => n.kind || (isGroup(n) ? 'group' : (KINDS.find(k => k[1].test
 const gnorm = n => typeof n.grad === 'number' ? n.grad : n.grad?.data ? Math.hypot(...n.grad.data) : null;
 const shapeStr = t => !t ? '' : t.tokens && !t.shape ? t.tokens.length + ' 项' : (t.full ?? t.shape ?? []).join('×') || '1 个数';
 
-// ---- what is on screen: a group is either open (drawn as a dashed frame) or closed (drawn as one box)
+// ---- what is on screen: a group is either open (drawn as a labelled frame) or closed (drawn as one box)
 // the slider position that opens a group. Branches that are single steps open together with the module around them:
 // there is nothing more inside them, so a stop of their own would only add a click.
 const levelOf = g => g.depth + 1 - (g.parallel && !g.children.some(isGroup) ? 1 : 0);
@@ -244,13 +246,13 @@ function view() {
 function cv(d, w, h, max, cssW) {
   const c = el('canvas'); c.width = w; c.height = h; c.style.width = cssW + 'px';
   const x = c.getContext('2d'), im = x.createImageData(w, h);
-  for (let i = 0; i < w * h; i++) { const v = d[i] || 0; im.data.set([...(v < 0 ? RED : INK), Math.min(255, Math.abs(v) / max * 255)], i * 4); }
+  for (let i = 0; i < w * h; i++) { const v = d[i] || 0; im.data.set([...(v < 0 ? RED : INK), Math.min(255, (Math.abs(v) / max) ** .7 * 255)], i * 4); }
   x.putImageData(im, 0, 0); return c;
 }
 function miniBars(d, max) {
-  const c = el('canvas'), n = d.length, bw = Math.max(2, Math.floor(52 / n)); c.width = n * bw; c.height = 40; c.style.width = n * bw + 'px';
+  const c = el('canvas'), n = d.length, bw = Math.max(2, Math.floor(60 / n)); c.width = n * bw; c.height = 44; c.style.width = n * bw + 'px';
   const x = c.getContext('2d');
-  d.forEach((v, i) => { const hh = Math.max(1, Math.abs(v) / max * 40); x.fillStyle = `rgb(${v < 0 ? RED : INK})`; x.fillRect(i * bw, 40 - hh, bw - 1, hh); });
+  d.forEach((v, i) => { const hh = Math.max(1, Math.abs(v) / max * 44); x.fillStyle = `rgb(${v < 0 ? RED : INK})`; x.fillRect(i * bw, 44 - hh, bw - 1, hh); });
   return c;
 }
 function thumb(t) {
@@ -261,9 +263,9 @@ function thumb(t) {
   if (!d) return el('span', 'tk', '…');
   if (d.length === 1) return el('span', 'num', f(d[0]));
   const max = absmax(d), s = t.shape?.length ? t.shape : [d.length];
-  if (s.length < 2) { if (d.length <= 16) return miniBars(d, max); const strip = cv(d, 1, d.length, max, 12); strip.style.height = '46px'; return strip; }
-  const W = s.at(-1), H = s.at(-2), n = H * W, C = Math.min(3, d.length / n), k = 40 / Math.max(H, W), box = el('span', 'stack');
-  const hh = H * k < 14 ? Math.min(40, H * 5) : H * k;     // a few long rows (the positions of a short sequence): taller, so the rows can be told apart
+  if (s.length < 2) { if (d.length <= 16) return miniBars(d, max); const strip = cv(d, 1, d.length, max, 14); strip.style.height = '48px'; return strip; }
+  const W = s.at(-1), H = s.at(-2), n = H * W, C = Math.min(3, d.length / n), k = 44 / Math.max(H, W), box = el('span', 'stack');
+  const hh = H * k < 14 ? Math.min(44, H * 5) : H * k;     // a few long rows (the positions of a short sequence): taller, so the rows can be told apart
   box.style.width = W * k + (C - 1) * 6 + 'px'; box.style.height = hh + (C - 1) * 6 + 'px';
   for (let c = C - 1; c >= 0; c--) { const m = cv(d.slice(c * n, (c + 1) * n), W, H, max, W * k); m.style.height = hh + 'px'; m.style.left = c * 6 + 'px'; m.style.top = (C - 1 - c) * 6 + 'px'; box.append(m); }
   return box;
@@ -308,9 +310,10 @@ function build() {
   const card = (n, input) => {
     const made = V.data.filter(d => d.prod === n).map(d => d.leaf.out), many = made.length > 1, t = lastLeaf(n).out, multi = many && el('span', 'multi', made.slice(0, 3).map(thumb));
     if (multi) multi.style.zoom = made.length > 2 ? .36 : .5;
-    const wide = [...n.name].reduce((w, c) => w + (c.charCodeAt(0) > 255 ? 12 : 6.3), 0) > 76;     // a name that will not fit on one line: smaller, so its two lines and the type still fit
-    const pick = el('button', 'pick', el('span', wide ? 'head long' : 'head', n.name, input ? null : el('small', '', n.type || '模块')), el('span', 'thumb', multi || thumb(t)), el('span', '', many ? made.length + ' 路输出' : shapeStr(t)));
+    const wide = [...n.name].reduce((w, c) => w + (c.charCodeAt(0) > 255 ? 13 : 7.2), 0) > 80;     // a name that will not fit on one line: smaller, so that two lines fit
+    const pick = el('button', 'pick', el('span', wide ? 'head long' : 'head', n.name.replace(/[_.](?=\w)/g, '$&​')),el('span', 'thumb', multi || thumb(t)), el('span', '', many ? made.length + ' 路输出' : shapeStr(t)));
     pick.onclick = () => go(input ? 0 : V.ops.indexOf(n) + 1);
+    if (!input) pick.title = n.type || '模块';
     const c = el('div', 'card' + (input ? ' in' : isGroup(n) ? ' group' : ''), pick);
     c.style.setProperty('--k', `var(--k-${kindOf(n)})`);
     if (isGroup(n)) { const x = el('button', 'exp', '+'); x.setAttribute('aria-label', `展开 ${n.name}`); x.onclick = () => toggle(n); c.append(x); }
@@ -319,7 +322,7 @@ function build() {
   // vertical room: how far a thing reaches above / below the centre line of its row. Branches and boxed modules count
   // for nothing here: they are boxes, and the browser makes their own row as tall as they turn out.
   const room = (ns, up, dn, a, b) => ns.map(ext).reduce(([u, d], [x, y]) => [Math.max(u, x + a), Math.max(d, y + b)], [up, dn]);
-  const ext = n => !framed(n) ? [53, 53] : n.parallel || boxed(n) ? [0, 0] : room(n.children, 77, 61, 12, 6);
+  const ext = n => !framed(n) ? [53, 53] : n.parallel || boxed(n) ? [0, 0] : room(n.children, 77, 61, 20, 6);
   const flow = (e, m) => { for (const [k, v] of [['--nt', m[0]], ['--nb', m[1]], ['--shift', (m[0] - m[1]) / 2]]) e.style.setProperty(k, v + 'px'); return m; };
   const put = (box, c, m) => {                             // m: the room rows keep in the flow this goes into
     if (!framed(c)) return box.append(card(c, isInput(c)));
@@ -346,7 +349,7 @@ function build() {
   const kinds = [...new Set(V.ops.map(kindOf))].filter(k => KINDS.some(x => x[0] === k));
   $('legend').replaceChildren(...kinds.map(k => { const i = el('i'); i.style.setProperty('--k', `var(--k-${k})`); return el('span', '', i, KINDS.find(x => x[0] === k)[2]); }),
     ...(V.ops.some(isGroup) ? [el('span', '', '带阴影的方框里面还有更细的步骤')] : []),
-    ...(stage.querySelector('.par') ? [el('span', '', '同一个虚线框里上下叠放的几行，是并行的几条支路')] : []),
+    ...(stage.querySelector('.par') ? [el('span', '', '同一个框里上下叠放的几行，是并行的几条支路')] : []),
     ...(groups.some(g => framed(g) && !run(g)[0] && run(g)[1] > 2) ? [el('span', '', '标着 ×N 的模块后面还有 N−1 个结构相同的，只展开了这一个，其余的点“＋”展开')] : []));
   wire(); detail(); ui();
 }
@@ -555,7 +558,7 @@ function figureSvg() {
 }
 function drawSvg() {
   const stage = $('stage'), base = stage.getBoundingClientRect(), css = getComputedStyle(document.documentElement), tok = k => css.getPropertyValue(k).trim();
-  const ink = tok('--ink'), pencil = tok('--pencil'), paper = tok('--paper'), n = v => +v.toFixed(1), esc = s => s.replace(/[&<>]/g, c => `&#${c.charCodeAt(0)};`);
+  const ink = tok('--ink'), edge = tok('--edge'), line = tok('--line'), card = tok('--card'), sheet = tok('--sheet'), n = v => +v.toFixed(1), esc = s => s.replace(/[&<>]/g, c => `&#${c.charCodeAt(0)};`);
   const at = r => [n(r.left - base.left), n(r.top - base.top), n(r.width), n(r.height)], box = e => at(e.getBoundingClientRect());
   const rect = ([x, y, w, h], a) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" ${a}/>`;
   const image = (e, href) => { const [x, y, w, h] = box(e); return `<image href="${href}" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="none"/>`; };
@@ -567,20 +570,22 @@ function drawSvg() {
     const rs = [...f.getClientRects()].map(at);
     rs.forEach(([x, y, w, h], i) => {
       const L = i > 0, R = i < rs.length - 1, r = x + w, b = y + h;
-      out.push(rect([x, y, w, h], `fill="${ink}" fill-opacity=".035"`), `<path d="M${x + (L ? 0 : 8)},${y}H${r - (R ? 0 : 8)}${R ? `M${r},${b}` : `Q${r},${y} ${r},${y + 8}V${b - 8}Q${r},${b} ${r - 8},${b}`}H${x + (L ? 0 : 8)}${L ? '' : `Q${x},${b} ${x},${b - 8}V${y + 8}Q${x},${y} ${x + 8},${y}`}" fill="none" stroke="${pencil}" stroke-width="1.5" stroke-dasharray="5 4"/>`);
+      out.push(rect([x, y, w, h], `fill="${ink}" fill-opacity=".04"`), `<path d="M${x + (L ? 0 : 8)},${y}H${r - (R ? 0 : 8)}${R ? `M${r},${b}` : `Q${r},${y} ${r},${y + 8}V${b - 8}Q${r},${b} ${r - 8},${b}`}H${x + (L ? 0 : 8)}${L ? '' : `Q${x},${b} ${x},${b - 8}V${y + 8}Q${x},${y} ${x + 8},${y}`}" fill="none" stroke="${line}"/>`);
     });
   }
-  for (const l of stage.querySelectorAll('.glabel')) out.push(rect(box(l), `fill="${paper}"`));
   for (const c of stage.querySelectorAll('.card')) {
-    const [x, y, w, h] = box(c), head = c.querySelector('.head'), hh = box(head)[3], r = x + w;
-    if (c.classList.contains('group')) out.push(rect([x + 5, y + 5, w, h], `rx="4" fill="${paper}" stroke="${pencil}"`));
-    out.push(rect([x, y, w, h], `rx="4" fill="${paper}"`));
-    if (!c.classList.contains('in')) out.push(`<path d="M${x},${y + hh}V${y + 4}Q${x},${y} ${x + 4},${y}H${r - 4}Q${r},${y} ${r},${y + 4}V${y + hh}z" fill="${getComputedStyle(head).backgroundColor}"/>`);
-    for (const m of c.querySelectorAll('canvas, img')) out.push(m.closest('.stack') ? rect(box(m), `fill="${paper}" stroke="${ink}"`) : '', image(m, m.src || big(m)));
-    out.push(rect([x, y, w, h], `rx="4" fill="none" stroke="${ink}" stroke-width="1.5"`));
+    const [x, y, w, h] = box(c), head = c.querySelector('.head'), hh = box(head)[3] + 1.5, r = x + w;
+    if (c.classList.contains('group')) out.push(rect([x + 4, y + 4, w, h], `rx="7" fill="${card}" stroke="${edge}"`));
+    out.push(rect([x, y, w, h], `rx="7" fill="${card}"`));
+    if (!c.classList.contains('in')) out.push(`<path d="M${x},${y + hh}V${y + 7}Q${x},${y} ${x + 7},${y}H${r - 7}Q${r},${y} ${r},${y + 7}V${y + hh}z" fill="${getComputedStyle(head).backgroundColor}"/>`);
+    for (const m of c.querySelectorAll('canvas, img')) out.push(m.closest('.stack') ? rect(box(m), `fill="${card}" stroke="${edge}"`) : '', image(m, m.src || big(m)));
+    out.push(rect([x, y, w, h], `rx="7" fill="none" stroke="${edge}" stroke-width="1.5"`));
   }
+  // a module's name lies over any arrow that runs along the edge it sits on, as on the page
+  for (const w of G.wires) out.push(`<path d="${w.d}" fill="none" stroke="${ink}" stroke-width="1.5" marker-end="url(#a)"/>`);
+  for (const l of stage.querySelectorAll('.glabel')) { const q = box(l); out.push(rect(q, `rx="${q[3] / 2}" fill="${sheet}" stroke="${line}"`)); }
   // text: one <text> per line as the browser broke it, found by asking where each character sits
-  const pen = el('canvas').getContext('2d'), range = document.createRange(), walk = document.createTreeWalker(stage, NodeFilter.SHOW_TEXT);
+  const pen =el('canvas').getContext('2d'), range = document.createRange(), walk = document.createTreeWalker(stage, NodeFilter.SHOW_TEXT);
   for (let t; (t = walk.nextNode());) {
     const p = t.parentElement, cs = getComputedStyle(p), clip = p.closest('.head')?.getBoundingClientRect();
     if (p.closest('.exp, .glabel span')) continue;
@@ -596,7 +601,6 @@ function drawSvg() {
       if (r && r.width) line ? line.s += t.data[i] : line = { s: t.data[i], left: r.left, top: r.top, h: r.height };
     }
   }
-  for (const w of G.wires) out.push(`<path d="${w.d}" fill="none" stroke="${ink}" stroke-width="1.5" marker-end="url(#a)"/>`);
   paint(false);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.ceil(base.width)}" height="${Math.ceil(base.height)}" viewBox="0 0 ${Math.ceil(base.width)} ${Math.ceil(base.height)}">` +
     `<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 1L10 5L0 9z" fill="${ink}"/></marker></defs>${out.join('')}</svg>`;
