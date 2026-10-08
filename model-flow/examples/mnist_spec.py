@@ -17,7 +17,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 
-sys.path[:0] = [os.getcwd(), os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")]
+sys.path[:0] = [os.getcwd(), os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")]
 from fxtrace import trace, variant  # noqa: E402
 from main import Net, train  # noqa: E402
 

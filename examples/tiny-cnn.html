@@ -6,15 +6,25 @@
 <style>
 /* Layout: one framework figure across the page — boxes are operations, the small pictures between them are data.
    Controls sit above it; the current step's input / operation / output is spelled out below.
-   Single paper look by choice. Restyle by changing the tokens below. */
+   Two looks from one set of tokens: a notebook page, and the same notebook at night. The page follows the viewer's
+   setting (prefers-color-scheme, or data-theme on the root where a host sets it); the button on the page overrides it.
+   --ink and --red must stay six-digit hex: the pictures of tensors are painted from them. */
 :root { color-scheme: light;
-  --paper: #f7f6f1; --grid: #e4e9ee; --ink: #1b2a41; --pencil: #6f7782; --red: #c8372d;
+  --paper: #f7f6f1; --grid: #e4e9ee; --ink: #1b2a41; --pencil: #6f7782; --red: #c8372d; --tint: rgba(27, 42, 65, .035);
   --k-conv: #d6e4f5; --k-pool: #d5ecdb; --k-dense: #e5dbf3; --k-act: #f7eabb; --k-norm: #e9e5da; --k-attn: #f8d8cf;
   --k-shape: #e0e3e6; --k-loss: #f5cfca; --k-group: #fdfcf8; --k-other: #fdfcf8;
   --serif: "Noto Serif SC", "Songti SC", "SimSun", serif;
   --kai: "LXGW WenKai", "KaiTi", "STKaiti", "Kaiti SC", "Noto Serif SC", serif;
   --mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
 }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark;
+  --paper: #151a21; --grid: #202832; --ink: #e8ecf1; --pencil: #93a0b0; --red: #ff8272; --tint: rgba(232, 236, 241, .045);
+  --k-conv: #20385a; --k-pool: #1f4030; --k-dense: #3a2c59; --k-act: #524714; --k-norm: #3a372f; --k-attn: #55291f;
+  --k-shape: #2f353d; --k-loss: #552621; --k-group: #1c222b; --k-other: #1c222b } }
+:root[data-theme="dark"] { color-scheme: dark;
+  --paper: #151a21; --grid: #202832; --ink: #e8ecf1; --pencil: #93a0b0; --red: #ff8272; --tint: rgba(232, 236, 241, .045);
+  --k-conv: #20385a; --k-pool: #1f4030; --k-dense: #3a2c59; --k-act: #524714; --k-norm: #3a372f; --k-attn: #55291f;
+  --k-shape: #2f353d; --k-loss: #552621; --k-group: #1c222b; --k-other: #1c222b }
 * { box-sizing: border-box }
 body { margin: 0; color: var(--ink); font: 16px/1.75 var(--serif); font-variant-numeric: tabular-nums; padding-block: 2rem 4rem; padding-inline: 16px;
   background: linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 100% 24px, linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 24px 100%, var(--paper) }
@@ -55,7 +65,7 @@ canvas, img { image-rendering: pixelated; display: block; max-width: 100%; heigh
 .wrap { overflow-x: auto; overflow-y: hidden }
 .stage { position: relative; font-size: 0; line-height: 0; padding-block: 10px }
 #wires { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none }
-.frame { position: relative; padding: calc(var(--up) - var(--shift)) 6px calc(var(--dn) + var(--shift)); border: 1.5px dashed var(--pencil); border-radius: 8px; background: rgba(27, 42, 65, .035) }
+.frame { position: relative; padding: calc(var(--up) - var(--shift)) 6px calc(var(--dn) + var(--shift)); border: 1.5px dashed var(--pencil); border-radius: 8px; background: var(--tint) }
 .par, .box { vertical-align: middle; max-width: calc(100% - 8px); margin: 6px 4px; text-align: left }
 .par { display: inline-flex; flex-direction: column; padding: 12px 16px 6px }
 .box { display: inline-block; padding: 10px 6px 4px }
@@ -128,7 +138,7 @@ figure { margin: 0; display: grid; gap: .6rem; min-width: 0 }
     <div class="ctl"><label for="level">详略</label><span>概括</span><input type="range" id="level" min="1" step="1"><span>详细</span><output id="lvl" for="level" class="small"></output></div>
     <div class="ctl"><button id="first" aria-label="回到起点">⏮</button><button id="prev">← 上一步</button><button id="play"></button><button id="next">下一步 →</button><input type="range" id="step" min="0" step="1" aria-label="当前步骤"><output id="pos" for="step" class="small"></output></div>
     <div class="ctl" id="vctl" hidden><label for="variant" id="vlab"></label><input type="range" id="variant" min="0" step="1"><output id="vname" for="variant" class="small"></output></div>
-    <div class="ctl"><button id="export">导出 SVG</button></div>
+    <div class="ctl"><button id="export">导出 SVG</button><button id="theme" aria-label="切换浅色和深色"></button></div>
   </section>
   <figure>
     <div class="wrap"><div class="stage" id="stage"></div></div>
@@ -141,8 +151,18 @@ figure { margin: 0; display: grid; gap: .6rem; min-width: 0 }
 
 <script type="application/json" id="spec">{"title":"TinyCNN 数据流","summary":"一个最小的卷积分类器：两个边缘检测卷积核，加一个全连接层，把 8×8 的手写图案分成 0、1、7 三类。权重是手工设定的，没有经过训练。","example":"一张 8×8 的手写“7”（和模板相比向右偏了一格），正确答案是“7”。","levels":["整体","两个阶段","每一层"],"root":{"name":"root","children":[{"name":"输入图像","type":"Input","out":{"shape":[8,8],"data":[0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0]},"grad":{"shape":[8,8],"data":[0,0,0.0074,0.0074,-0.0074,-0.0074,0,0,0,-0.0745,-0.0471,-0.0471,-0.0272,-0.0869,-0.0397,0.0397,0.0473,0.0473,-0.0349,-0.0349,-0.0074,-0.0645,-0.0174,0.0223,0.0473,0.1218,0.0196,0.0147,-0.02,-0.0149,0.0571,0.0223,0.0573,0.0423,-0.0622,-0.0921,0.0149,0.0771,0.0323,0.0174,0.0573,0.0423,-0.0771,-0.1692,-0.0174,0.1045,0.0323,0.0174,0.0149,0,-0.0149,-0.0896,0.0199,0.0747,-0.0497,0,0.0149,0,0,-0.0149,0.0149,0.0448,-0.0149,0]},"note":"1 表示有笔画，0 表示空白。下面的梯度图显示哪些像素一变，损失就跟着变，也就是模型判断时最在意的位置。"},{"name":"TinyCNN","type":"Model","desc":"整个模型：先提取边缘特征，再根据特征打分。","out":{"shape":[3],"data":[0.199,0.033,0.768],"labels":["0","1","7"]},"note":"模型认为这张图是“7”，把握 76.8%。","children":[{"name":"特征提取","type":"Sequential","desc":"把像素变成“哪里有横边、哪里有竖边”的粗略地图。","note":"64 个像素被压缩成 18 个数：2 种边缘 × 3×3 个区域。","children":[{"name":"conv","type":"Conv2d","out":{"shape":[2,6,6],"data":[0,0,0,0,-1,-1,1,2,3,2,2,1,0,0,-1,-1,0,1,0,0,-1,0,0,1,0,-1,0,0,1,0,0,0,1,1,1,0,-1,-1,0,0,-1,1,-1,-1,0,-1,-1,2,0,0,-1,-1,0,1,0,0,-2,-1,2,1,0,-1,-2,1,2,0,0,-1,-1,1,1,0]},"grad":{"shape":[2,6,6],"data":[0,0,0,0,0,0,0,-0.0745,0.02,0,-0.0397,0,0.0025,0.0025,0,0,0,-0.0174,0.0025,0.0025,0,0.0025,0,-0.0174,0,0,0,0,0.0149,0,0,0,-0.0149,-0.0149,0.0149,0,0,0,0.0074,0.0074,0,0,0,0,0.0074,0,0,-0.0397,0.0448,0.0448,0,0,0,0,0.0448,0.0448,0,0,-0.0348,0,0.0149,0,0,-0.0448,0.0348,0,0.0149,0,0,-0.0448,0,0]},"note":"第 1 张图是横向边缘检测的结果：顶上那一横的上沿是负值，下沿是正值。第 2 张图是竖向边缘：笔画左侧为负，右侧为正。3×3 的窗口不补边，所以 8×8 变成 6×6。"},{"name":"relu","type":"ReLU","out":{"shape":[2,6,6],"data":[0,0,0,0,0,0,1,2,3,2,2,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,1,0,0,0,1,1,1,0,0,0,0,0,0,1,0,0,0,0,0,2,0,0,0,0,0,1,0,0,0,0,2,1,0,0,0,1,2,0,0,0,0,1,1,0]},"grad":{"shape":[2,6,6],"data":[0,0,0,0,0,0,0,-0.0745,0.02,0,-0.0397,0,0.0025,0.0025,0.0025,0.0025,0,-0.0174,0.0025,0.0025,0.0025,0.0025,0,-0.0174,0,0,0,0,0.0149,0,0,0,-0.0149,-0.0149,0.0149,0,0.0149,0.0149,0.0074,0.0074,0,0,0.0149,0.0149,0.0074,0.0074,0,-0.0397,0.0448,0.0448,-0.0274,-0.0274,0,0,0.0448,0.0448,-0.0274,-0.0274,-0.0348,0,0.0149,0.0149,0,-0.0448,0.0348,0,0.0149,0.0149,0,-0.0448,0,0]},"note":"所有负值都被清零，只留下“上亮下暗”和“左亮右暗”这两种方向的边缘。"},{"name":"pool","type":"MaxPool2d","out":{"shape":[2,3,3],"data":[2,3,2,0,0,1,0,1,1,0,0,2,0,0,2,0,1,2]},"grad":{"shape":[2,3,3],"data":[-0.0745,0.02,-0.0397,0.0049,0.0049,-0.0348,0,-0.0299,0.0299,0.0299,0.0148,-0.0397,0.0896,-0.0548,-0.0348,0.0299,-0.0896,0.0348]},"note":"每 2×2 取最大值，6×6 变成 3×3。图案偏移一格时，池化后的结果变化不大，这就是它能容忍位置偏移的原因。"}]},{"name":"分类头","type":"Sequential","desc":"根据特征给每个类别打分，再把分数变成概率。","children":[{"name":"flatten","type":"Flatten","out":{"shape":[18],"data":[2,3,2,0,0,1,0,1,1,0,0,2,0,0,2,0,1,2]},"grad":{"shape":[18],"data":[-0.0745,0.02,-0.0397,0.0049,0.0049,-0.0348,0,-0.0299,0.0299,0.0299,0.0148,-0.0397,0.0896,-0.0548,-0.0348,0.0299,-0.0896,0.0348]},"note":"2×3×3 排成 18 个数，数值和上一步完全相同。"},{"name":"fc","type":"Linear","out":{"shape":[3],"data":[0.15,-1.65,1.5],"labels":["0","1","7"]},"grad":{"shape":[3],"data":[0.1991,0.0329,-0.232]},"note":"三个类别各得一个分数：“0” 0.15，“1” -1.65，“7” 1.50。这里的权重是每个类别模板的特征（减去平均值），所以特征越像哪个模板，哪个分数越高。"},{"name":"softmax","type":"Softmax","out":{"shape":[3],"data":[0.199,0.033,0.768],"labels":["0","1","7"]},"grad":{"shape":[3],"data":[0,0,-1.3021]},"note":"分数变成概率：“0” 19.9%，“1” 3.3%，“7” 76.8%。"}]}]},{"name":"loss","type":"CrossEntropyLoss","out":{"shape":[],"data":[0.264]},"note":"正确类别“7”的概率是 76.8%，损失 = −ln(0.768) = 0.264。概率越接近 100%，损失越接近 0。"}]}}</script>
 <script>
+// For scripts/check.py: a headless browser's log file is the one way out of the page that works everywhere, so
+// results go to the console, base64 so that no quote or line break gets in the log's way.
+const say = (tag, text) => console.log(tag + ' ' + btoa(unescape(encodeURIComponent(text))));
+// a spec the page cannot draw (a "from" that names no step, say) should say so, to a reader and to the script alike
+addEventListener('error', e => { const p = document.createElement('pre'); p.id = 'flowerror'; p.textContent = '这张图没能画出来：' + e.message; p.style.cssText = 'color:#c8372d;white-space:pre-wrap;padding:1rem'; document.body.prepend(p); say('MODEL_FLOW_ERROR', e.message); });
 const SPEC = JSON.parse(document.getElementById('spec').textContent);
-const INK = [27, 42, 65], RED = [200, 55, 45], T = 1800;
+const T = 1800, ROOT = document.documentElement;
+// the two colours tensors are painted in, read off the theme: [r, g, b] of --ink (positive) and --red (negative)
+let INK, RED;
+const inks = () => [INK, RED] = ['--ink', '--red'].map(k => getComputedStyle(ROOT).getPropertyValue(k).trim().match(/[0-9a-f]{2}/gi).map(h => parseInt(h, 16)));
+try { const t = localStorage.getItem('model-flow-theme'); if (t) ROOT.dataset.theme = t; } catch {}   // the look this reader chose last time
+inks();
 const KINDS = [['loss', /loss|entropy/i, '损失'], ['attn', /attention|attn/i, '注意力'], ['conv', /conv/i, '卷积'], ['pool', /pool|sampl|interpolat/i, '池化 / 采样'],
   ['norm', /norm|dropout/i, '归一化 / Dropout'], ['act', /relu|gelu|silu|swish|sigmoid|tanh|softmax/i, '激活'], ['dense', /linear|dense|embed|matmul|bmm/i, '全连接 / 嵌入'],
   ['shape', /flatten|reshape|view|permute|transpose|squeeze|cat|stack|add|mul|sub|getitem/i, '形状 / 合并']];
@@ -320,8 +340,8 @@ function build() {
     if (!G.wires.some(w => w.a === a && w.b === b)) G.wires.push({ a, b, op: c });
   }
   G.svg = svg('svg', { id: 'wires' });
-  G.svg.innerHTML = '<defs>' + [['ah', '#1b2a41'], ['ah-now', '#c8372d'], ['ah-todo', '#6f7782']].map(([id, c]) =>
-    `<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 1L10 5L0 9z" fill="${c}"/></marker>`).join('') + '</defs>';
+  G.svg.innerHTML = '<defs>' + [['ah', 'var(--ink)'], ['ah-now', 'var(--red)'], ['ah-todo', 'var(--pencil)']].map(([id, c]) =>
+    `<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 1L10 5L0 9z" style="fill:${c}"/></marker>`).join('') + '</defs>';
   stage.append(G.svg);
   const kinds = [...new Set(V.ops.map(kindOf))].filter(k => KINDS.some(x => x[0] === k));
   $('legend').replaceChildren(...kinds.map(k => { const i = el('i'); i.style.setProperty('--k', `var(--k-${k})`); return el('span', '', i, KINDS.find(x => x[0] === k)[2]); }),
@@ -516,9 +536,24 @@ function setLevel(L) {
   build();
 }
 
+// ---- light and dark. The pictures of tensors are painted from the ink colours, so a change of look redraws them.
+const isDark = () => ROOT.dataset.theme ? ROOT.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+function recolour() { inks(); $('theme').textContent = isDark() ? '☀ 浅色' : '☾ 深色'; if (V) { stop(); build(); } }
+const themeWatch = new MutationObserver(recolour);
+themeWatch.observe(ROOT, { attributes: true, attributeFilter: ['data-theme'] });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', recolour);
+$('theme').onclick = () => { ROOT.dataset.theme = isDark() ? 'light' : 'dark'; try { localStorage.setItem('model-flow-theme', ROOT.dataset.theme); } catch {} };
+recolour();
+
 // ---- export: the figure as it stands (level, open modules) redrawn as plain SVG shapes, for a paper or a slide.
 // Everything is measured off the page, so positions and line breaks are the ones on screen. All in ink: no current step.
+// And ink on white whatever the page looks like: a dark page turns light while its figure is taken.
 function figureSvg() {
+  const was = ROOT.dataset.theme, dark = isDark(), look = t => { t ? ROOT.dataset.theme = t : delete ROOT.dataset.theme; themeWatch.takeRecords(); inks(); build(); };
+  if (dark) look('light');
+  try { return drawSvg(); } finally { if (dark) look(was); }
+}
+function drawSvg() {
   const stage = $('stage'), base = stage.getBoundingClientRect(), css = getComputedStyle(document.documentElement), tok = k => css.getPropertyValue(k).trim();
   const ink = tok('--ink'), pencil = tok('--pencil'), paper = tok('--paper'), n = v => +v.toFixed(1), esc = s => s.replace(/[&<>]/g, c => `&#${c.charCodeAt(0)};`);
   const at = r => [n(r.left - base.left), n(r.top - base.top), n(r.width), n(r.height)], box = e => at(e.getBoundingClientRect());
@@ -594,7 +629,10 @@ if (VAR) {
   $('variant').oninput = e => { stop(); pick(+e.target.value); build(); };
   pick(VAR.items.length - 1);
 }
-$('level').max = maxLevel; $('level').value = Math.min(2, maxLevel);
+// The link can say how to open: #level-3 starts at that level. #check (for scripts/check.py, in a headless browser)
+// leaves what flowCheckAll() found, and how tall the page is at each level, in <pre id="flowcheck">.
+const HASH = location.hash.slice(1).split('.'), asked = +(HASH.find(h => /^level-\d+$/.test(h)) || '').slice(6);
+$('level').max = maxLevel; $('level').value = Math.min(asked || 2, maxLevel);
 $('level').oninput = e => setLevel(+e.target.value);
 $('step').oninput = e => go(+e.target.value);
 $('play').onclick = play; $('first').onclick = () => go(0); $('prev').onclick = () => go(step - 1); $('next').onclick = () => go(step + 1);
@@ -603,6 +641,12 @@ addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') go(step + 1); else if (e.key === 'ArrowLeft') go(step - 1); else if (e.key === ' ') { e.preventDefault(); play(); }
 });
 setLevel(+$('level').value);
+if (HASH.includes('check')) {
+  const levels = [];
+  for (let L = 1; L <= maxLevel; L++) { setLevel(L); levels.push({ level: L, name: $('lvl').textContent, steps: V.ops.length, height: document.documentElement.scrollHeight }); }
+  setLevel(+$('level').value);
+  say('MODEL_FLOW_CHECK', JSON.stringify({ width: innerWidth, levels, problems: flowCheckAll() }));
+}
 let seenW = $('stage').clientWidth;
 new ResizeObserver(() => { const w = $('stage').clientWidth; if (w !== seenW) { seenW = w; stop(); wire(); ui(); } }).observe($('stage'));
 </script>

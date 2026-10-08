@@ -13,7 +13,7 @@ import torch
 import torch.nn.functional as F
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
 from fxtrace import nest, tensor, trace  # noqa: E402
 
 PROMPT, ANSWER = "Monday, Tuesday, Wednesday,", " Thursday"

@@ -1,3 +1,4 @@
 demo/pytorch-examples/data/
 *.pt
 __pycache__/
+dist/

@@ -1,10 +1,11 @@
 """Project glue for OpenAI CLIP (Hugging Face openai/clip-vit-base-patch32): one photo against three captions.
 
-    python <this file> spec.json
+    python <this file> spec.json [photo.jpg]
 
 Needs `transformers` and `pillow`; the first run downloads the model (about 600 MB) into the Hugging Face cache.
-The photo is demo/clip/000000039769.jpg (COCO val2017). fx cannot trace this model, so the steps come from
-fxtrace's hook path; the three captions travel through the text tower together, as a batch of three.
+The photo defaults to demo/clip/000000039769.jpg of the development repository (COCO val2017: two cats on a couch).
+fx cannot trace this model, so the steps come from fxtrace's hook path; the three captions travel through the text
+tower together, as a batch of three.
 """
 import base64
 import io
@@ -18,14 +19,15 @@ from PIL import Image
 from transformers import CLIPModel, CLIPProcessor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, ".."))
+sys.path.insert(0, os.path.join(HERE, "..", "scripts"))
 from fxtrace import nest, tensor, trace  # noqa: E402
 
 CAPTIONS = ["a photo of a cat", "a photo of a dog", "a photo of a couch"]  # each is 7 tokens, so nothing is padded and no mask is needed
 SHORT, RIGHT = ["cat", "dog", "couch"], 0
 proc = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32", attn_implementation="eager")  # eager: the attention weights are returned
-batch = proc(text=CAPTIONS, images=Image.open(os.path.join(HERE, "..", "demo", "clip", "000000039769.jpg")), return_tensors="pt", padding=True)
+PHOTO = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, "..", "..", "demo", "clip", "000000039769.jpg")
+batch = proc(text=CAPTIONS, images=Image.open(PHOTO), return_tensors="pt", padding=True)
 assert batch["attention_mask"].all(), "captions of different lengths would need the mask as an input"
 ids, pixels = batch["input_ids"], batch["pixel_values"]
 words = [proc.tokenizer.decode(t) for t in ids[RIGHT]]

@@ -16,7 +16,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets
 
-sys.path[:0] = [os.getcwd(), os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")]
+sys.path[:0] = [os.getcwd(), os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")]
 from fxtrace import nest, trace  # noqa: E402
 from main import APP_MATCHER, SiameseNetwork, train  # noqa: E402
 
