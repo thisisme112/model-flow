@@ -31,6 +31,40 @@ def problems(spec):
     return bad
 
 
+def wordy(spec):
+    """Wording a newcomer gives up on: a sentence that runs on, or a paragraph that lists things in prose. (The cure
+    is shorter sentences and a list, not less content.)"""
+    out = []
+
+    def check(where, text, limit=55):
+        for para in (text if isinstance(text, list) else [text or ""]):
+            plain = re.sub(r"\*\*|`", "", para)
+            for sent in re.split(r"(?<=[。！？；])", plain):
+                if len(sent) > limit:
+                    out.append(f"{where}: a sentence of {len(sent)} characters (split it, or make it a list): {sent[:22]}…")
+            if not para.startswith("- ") and len(re.findall(r"[。！？]", plain)) > 3:
+                out.append(f"{where}: a paragraph of {len(re.findall(r'[。！？]', plain))} sentences (break it up, or make its parallel parts a list): {plain[:22]}…")
+
+    def walk(n):
+        for k in ("desc", "why", "origin"):
+            if n.get(k):
+                check(f'{n["name"]} · {k}', n[k])
+        if n.get("children") and n.get("origin") and not n.get("origin_kind"):
+            out.append(f'{n["name"]}: has no "origin_kind" (fixed / standard / named / own), so its panel has no badge')
+        for c in n.get("children") or []:
+            walk(c)
+
+    for c in spec["root"]["children"]:
+        walk(c)
+    check("summary", spec.get("summary"), 70)
+    check("example", spec.get("example"), 70)
+    for i, t in enumerate(spec.get("background") or []):
+        check(f"background {i + 1}", t)
+    for c in spec.get("concepts") or []:
+        check(f'concept {c["name"]}', c.get("text"))
+    return list(dict.fromkeys(out))
+
+
 def build(spec_path, out_path, viewer=VIEWER):
     spec = json.load(open(spec_path, encoding="utf-8"))
     if "children" not in spec.get("root", {}):
@@ -44,6 +78,9 @@ def build(spec_path, out_path, viewer=VIEWER):
     page = re.sub(r"<title>.*?</title>", lambda m: "<title>" + html.escape(spec.get("title") or "Model Flow") + "</title>", page, count=1)
     open(out_path, "w", encoding="utf-8", newline="\n").write(page)
     size = len(page.encode("utf-8"))
+    long = wordy(spec)
+    if long:
+        print(f"{len(long)} place(s) where the wording is heavy (see \"Easy to read\" in references/glue.md):\n  " + "\n  ".join(long[:60]))
     print(f"wrote {out_path} {size // 1024}KB" + ("  (over 3 MB: trace with max_hw=24 or max_c=4 to keep the page light)" if size > 3 << 20 else ""))
 
 

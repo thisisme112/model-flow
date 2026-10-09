@@ -17,12 +17,21 @@ One method covers every project: **a tree of steps, edges between them, and one 
 - The edges give the arrows, including branches and skip connections.
 - The example gives every arrow a real piece of data to draw.
 
+**The reader is a beginner who is starting research.** They can read some Python and know what a matrix is. They
+have not met a mel spectrogram, attention, a residual connection or a logit, and they cannot tell from a box's name
+whether it is a trained network, a fixed formula, a famous architecture or something this project made up. The
+page is how they get into the project, so it has to answer, for every box they can land on: what does it do, why
+is it there, is it learned or fixed, and is it a known thing with a name. A figure that is correct but leaves those
+unanswered has failed at its job.
+
 The viewer (`assets/viewer.html`) is generic and finished. Your work is producing the **spec** (a JSON file) for this
-project, by running the project's own code on one sample. Two things are not negotiable, because they are what
+project, by running the project's own code on one sample. Three things are not negotiable, because they are what
 makes the page worth more than a sketch:
 
 - **Never invent numbers.** Every tensor on the page comes from running the real model; every number quoted in a
   note is computed in the script that wrote it. If the model cannot be run, show shapes only and say so on the page.
+- **Explain every box for a beginner.** Every group and every step says what it does, why it is needed, where it
+  comes from, and whether it has learned parameters; every term it uses is explained on the page. Step 5 says how.
 - **Read your own page back before you hand it over.** A diagram with an arrow through a box, or an overview level
   with thirty boxes, is not done. Step 6 has a script for this.
 
@@ -38,13 +47,14 @@ makes the page worth more than a sketch:
 | `assets/spec_template.py` | A glue script to copy and fill in. | Step 5 |
 | `references/environment.md` | Finding the project's interpreter, installing what is missing, weights and data, what to tell the user. | Step 2 |
 | `references/tracing.md` | `trace()` in detail: fx and hook paths, inputs, losses, sizes, several checkpoints, non-PyTorch projects, errors. | Step 4 |
-| `references/glue.md` | Grouping steps into levels, branches, repeats, writing the words, drawing awkward data. | Step 5 |
+| `references/glue.md` | Grouping steps into levels, branches, repeats, writing for a beginner (what must be explained, with examples), drawing awkward data. | Step 5 |
 | `references/spec.md` | The spec format, field by field, and how tensors are drawn. | Steps 5–6 |
 | `references/presenting.md` | Opening the page, walking someone through it, exporting, publishing, the final report. | Step 7 |
-| `examples/*.py` | Four complete glue scripts: a plain CNN, a two-tower ResNet, a GPT, CLIP. To read, not to run: each belongs to the project it was written for. Read the one nearest yours. | Step 5 |
+| `examples/*.py` | Four complete glue scripts: a plain CNN, a two-tower ResNet, a GPT, CLIP. To read, not to run: each belongs to the project it was written for. Read the one nearest yours: for the regrouping, and for how the beginner's texts, the concept cards, the tiles and the figures drawn from `raw` are written in practice. They pick the parts of a model by name rather than by position where library versions differ; do the same. | Step 5 |
 
-`<skill>` below means this skill's folder. Python 3.9+ with `torch` is needed to trace; `check.py` needs any
-Chromium-based browser (Chrome, Edge, Chromium, Brave) but nothing else.
+`<skill>` below means this skill's folder. Python 3.9+ with `torch` is needed to trace, and `matplotlib` for the
+figures of Step 5 (install it like any other missing package, see `references/environment.md`); `check.py` needs
+any Chromium-based browser (Chrome, Edge, Chromium, Brave) but nothing else.
 
 ## Before you start
 
@@ -162,18 +172,70 @@ and the sample, trace, **regroup the leaves into the levels of Step 3**, and **w
 nearest your project first (`examples/mnist_spec.py` plain CNN, `siamese_spec.py` branches and towers,
 `gpt2_spec.py` transformer on the hook path, `clip_spec.py` two different towers), then `references/glue.md`.
 
-Every node a reader can land on, groups included, gets:
+Every node a reader can land on, groups included, gets these. The panel shows them under the box's name, in this
+order:
 
-- `desc`: what this step does in general. One or two sentences, no term the reader has not met. Common layer types
-  have built-in descriptions; write your own where the project uses a layer unusually or the type is its own.
-- `note`: what happened to *this example* here, quoting numbers the panel shows: "24×24 becomes 12×12", "the top
-  score is 9 with 6.31", "61% of the values became 0". Compute them from `raw` in the script.
+| Field | The question it answers | Rule |
+|---|---|---|
+| `desc` | 做什么: what goes in, what is done to it, what comes out | One to three sentences in everyday words. Common layer types have a built-in one; write your own for groups, for the project's own types, and wherever the built-in one does not say what the step is doing *here* |
+| `why` | 为什么需要: what this step is for in this model, and what would go wrong without it | Required on every group and on every step that is not a plain conv / norm / activation (those have a built-in one). Tie it to the task: not "extracts features" but "a waveform is 24,000 numbers that say nothing by themselves about pitch; this turns it into a picture where pitch and timbre are visible" |
+| `origin` | 来历: is this a model? does it have a name? | Required on every group and on every step whose type is not a standard layer. One of: a fixed signal-processing or maths step ("不是模型，是固定的信号处理；标准叫法是对数 mel 谱 log-mel spectrogram"); a standard layer or pattern, with the name to search for in Chinese and English; a named architecture, with the name and where it comes from ("ResNet-18，He 等 2015"); the project's own design, saying what known thing it resembles and how it differs |
+| `params` | 有没有可学习的参数 | `trace` fills it on every step and the page adds it up for groups. Set `"params": 0` on a step you add by hand; when you fold a parameter into a step, add its size to that step (`fold()` in the template does) |
+| `terms` | 这些词是什么意思 | `{"词": "一句话解释"}` for every term the texts of this node use that a beginner has not met: mel, 帧, token, logit, 通道, 残差, 感受野… Define a term on the first node that uses it. The page also collects all of them into one list under the title |
+| `note` | 这条样本在这里发生了什么 | Numbers the panel shows, computed from `raw`: "24×24 becomes 12×12", "the top score is 9 with 6.31", "61% of the values became 0". Say what the number means, not only what it is |
 
-Write them in the user's language. The page's own labels are in Chinese; names, descriptions and notes are yours.
+And the page gets a header:
 
-Also give the page its header: `title` (a short name), `source` (repo and file), `summary` (what the model is, with
-its real parameter count and a real accuracy if you measured one), `example` (the sample, what the model said, why
-this sample), and `levels` (a name for each slider position).
+- `title` (a short name), `source` (repo and file), `levels` (a name for each slider position);
+- `summary`: what the model is, its real parameter count, a real accuracy if you measured one;
+- `example`: the sample, what the model said, why this sample;
+- `background`: a list of three to five short paragraphs under "读图之前", for someone who has never seen the project:
+  **the task** (what question is being answered, about what data, and why it is hard); **what goes in and what comes
+  out**, in units a person understands (seconds of audio, a 28×28 picture; one number above or below zero); **the
+  idea of this model in plain words**, the way you would say it across a table; **how it is trained** (what the
+  loss compares) and **what the figure leaves out** of the larger system;
+- `glossary`: terms that belong to the whole page rather than to one box (the task's own words: 伪造语音, dev 集);
+- `concepts`: **the things several boxes talk about.** Every model has a few nouns of its own that the texts keep
+  using: "五个问题", "token", "记忆", "两座塔", "主干", "类别 token". A hover line is not enough for these: a reader
+  who meets "每个问题只读自己的区域" in the sixth box must be able to find out what the questions are, how many,
+  what each one is for and what comes out of them. Each gets a card below the figure, reached from a row of chips under the title (name, a few sentences on what
+  it is and what it does, a table when it has members: one row per question, per band, per tower), and every text
+  that names it links to the card. Before building, list the nouns that appear in three or more boxes; each one is
+  a concept or you have not finished.
+
+Write all of it in the user's language. The page's own labels are in Chinese.
+
+**Make it something a person wants to read.** A beginner who sees a block of even prose does not start reading it.
+The cure is not to say less and not to hide text behind a fold: everything stays on the page, and four things make
+it readable. `references/glue.md` ("Easy to read") has the rules and examples for each; `build.py` lists the
+sentences and paragraphs that break the first two.
+
+1. **Plain, short wording.** One idea per sentence, about 25 characters, never over 55. Say the thing, then stop.
+2. **Layout instead of paragraphs.** Any text may be a list of strings; a string starting with `"- "` is a point.
+   Parallel things (the parts of a step, the rows of a picture, the steps of a recipe) are points with a label
+   ("- 横向：时间，每 10 毫秒一列"), never a sentence with three commas. Numbers that matter go into `stats` tiles,
+   members of a concept into its `table`, the kind of thing a box is into `origin_kind` (a badge).
+3. **Emphasis.** One marked phrase per text (below).
+4. **Pictures with the words.** Common layers get a small drawing of what they do automatically; give `mini` to
+   your own steps that work like one. Wherever a sentence describes something that can be seen (which region a
+   question reads, where the bands are cut, how five numbers add up), draw it from this example's own tensors with
+   matplotlib and attach it as `figure`: on the node, and on the concept card that explains the idea.
+
+The marks, which work in `summary`, `example`, `background`, `desc`, `why`, `origin` and `note`:
+
+- `**…**` marks the one phrase a reader should take away from that text: the verdict in `origin` ("**不是模型**"), the
+  reason in `why`, the result in a `note` ("判 **real**，把握只有 **74.8%**"). One per text, two at most; when
+  everything is marked nothing is.
+- `` `…` `` sets a name from the code (`fake_logit`, `nn.MultiheadAttention`) apart from the prose.
+- A `background` paragraph opens with a short label and a colon ("任务：…", "进去和出来：…"); the page turns the
+  label into a coloured heading.
+
+**The test before you build:** read the level-1 and level-2 boxes in order, as someone who took one programming
+course. At every sentence ask "which word here would they have to look up?" and "would they know why this box
+exists?". Each such word goes into `terms`; each missing reason into `why`. Then ask of every group: "could they
+tell whether this is a trained network?" If not, `origin` is missing. And of every noun that keeps coming back:
+"if they clicked only this one box, would they know what that is?" If not, it belongs in `concepts`. `references/glue.md` has the list of what
+must always be explained and worked examples of weak and good texts.
 
 ## Step 6 — Build, read back, correct
 
@@ -214,7 +276,7 @@ Read `references/presenting.md`. In short: open the page for the user (or give t
 short guided tour in your message rather than a list of features: what to look at first, which box is the
 interesting one for this example, what the surprising number is. Then report plainly:
 
-- what the page shows (model, the example, what the model said about it);
+- what the page shows (model, the example, what the model said about it), in words the same beginner follows;
 - where the files are, and the one command that regenerates the page;
 - everything you installed or downloaded, where it went and how big it is;
 - what the page does **not** show or could not get right (random weights, a part of the model you left out, an arrow

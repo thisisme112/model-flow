@@ -8,6 +8,15 @@ One JSON object. `build.py` embeds it in the viewer; nothing else is needed to m
   "source": "pytorch/examples · siamese_network/main.py",
   "summary": "what the model is, how big, one measured fact",
   "example": "the one sample being traced, what the model said, why this sample",
+  "background": ["任务是什么…", "进去什么、出来什么…", "这个模型的想法…"],   // paragraphs under "读图之前", for a newcomer
+  "glossary": { "dev 集": "…" },             // terms of the whole page; merged with every node's "terms" into one list
+  "concepts": [ { "name": "五个问题",        // things many boxes refer to: one card each below the figure, linked from every text
+                  "aliases": ["问题向量", "问题"],      // other spellings the texts use (two characters or more)
+                  "short": "…",              // the hover line; default: the first sentence of text
+                  "text": ["…", "…"],        // what it is, what it does; a string or a list of paragraphs
+                  "table": { "head": ["问题", "能看的区域"], "rows": [["高频 hf", "…"]] },   // optional: one row per member
+                  "after": "…" } ],          // optional small print under the table
+  "stats": [["模型的判断", "real ✓", "标注是 real"], ["参数", "2,221,931"]],   // tiles under the title: label, value, small print
   "levels": ["整体", "两座塔", "每一层"],     // optional names for the slider positions, most general first
   "root": { "name": "root", "children": [NODE] },      // root itself is never drawn
 
@@ -29,7 +38,16 @@ steps it reads.
 { "id": "conv1",            // optional. Default: the name at the top level, otherwise "parent id/name". Must be unique.
   "name": "conv1",          // on the box. Keep the code's name for leaves.
   "type": "Conv2d",         // under the name; also picks the built-in description and the colour
-  "desc": "…",              // what this step does in general
+  "desc": "…",              // 做什么: what this step does in general
+  "why": "…",               // 为什么需要: what it is for in this model. Built in for common layers; write it for groups
+  "origin": "…",            // 来历: a fixed formula / a standard layer (its name) / a named architecture / the project's own
+  "params": 18816,          // learned numbers in this step; 0 = a fixed computation. The page adds groups up itself
+  "module": "cnn.lf.b1.0",  // which module or parameter "params" counts, so one that is called twice is added once
+  "origin_kind": "fixed",   // a badge: fixed 固定计算 · standard 标准做法 · named 知名结构 · own 项目自创 (standard layers get theirs)
+  "mini": "pool",           // a small drawing of what the step does, for a step of the project's own that works like a known
+                            // layer: conv pool relu gelu sigmoid linear norm attention add cat softmax dropout
+  "figure": { "image": "data:image/png;base64,…", "caption": "…" },   // a picture drawn from this example's tensors; or a list
+  "terms": { "帧": "…" },   // words the texts of this node use that a beginner has not met
   "note": "…",              // what happened to this example here
   "from": ["relu", "stem"], // ids this step reads. Default: the previous leaf. A group's id means the group's last leaf.
                             // On a group it applies to the group's first leaf.
@@ -44,6 +62,16 @@ steps it reads.
 
 A leaf with `"type": "Input"` is data entering from outside: the sample, the label, a learned table. It has a plain
 card, takes no playback step, and may sit inside the group that uses it.
+
+`desc`, `why`, `origin`, each `background` item and a concept's `text` may be a list of strings instead of one
+string: every string is a paragraph, and one that starts with `"- "` is a point of a list; a point that opens with
+a short label and a colon gets the label in bold. A concept may also have a `figure`.
+
+Texts (`summary`, `example`, `background`, `desc`, `why`, `origin`, `note`) may use `**重点**` for the phrase to
+remember and `` `name` `` for a name from the code; nothing else is interpreted. A word that is a key (or a
+space- or slash-separated part of a key, two characters or more) of any `terms` or of `glossary` is underlined on
+its first occurrence in a text and shows its meaning on hover. A `background` paragraph that opens with a label of
+up to 12 characters and a colon gets the label as a coloured heading.
 
 `build.py` rejects a spec in which two nodes share an id or a `from` names no node.
 

@@ -14,6 +14,7 @@
 :root { color-scheme: light;
   --paper: #f4f3ef; --sheet: #fbfbf9; --card: #ffffff; --line: #d6dae0; --edge: #56616f; --grid: #e6e9ed;
   --ink: #1b2a41; --pencil: #5b6470; --red: #c8372d; --tint: rgba(27, 42, 65, .04);
+  --c-do: #2f6fb5; --c-why: #b26a00; --c-origin: #6b4bb0; --c-param: #23805a; --c-term: #1f7a86; --mark: #ffe08a;
   --k-conv: #d6e4f5; --k-pool: #d5ecdb; --k-dense: #e5dbf3; --k-act: #f7eabb; --k-norm: #e9e5da; --k-attn: #f8d8cf;
   --k-shape: #e0e3e6; --k-loss: #f5cfca; --k-group: #eef0f2; --k-other: #eef0f2;
   --serif: "Noto Serif SC", "Songti SC", "SimSun", serif;
@@ -23,11 +24,13 @@
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark;
   --paper: #0f1318; --sheet: #161b22; --card: #1e242d; --line: #2c3541; --edge: #6b7a8f; --grid: #27303b;
   --ink: #e9edf2; --pencil: #9ca9b8; --red: #ff8272; --tint: rgba(233, 237, 242, .04);
+  --c-do: #7fb2ee; --c-why: #f0b657; --c-origin: #b79cf0; --c-param: #6fd0a3; --c-term: #6cc6d2; --mark: #6b5310;
   --k-conv: #25426b; --k-pool: #234a36; --k-dense: #40306a; --k-act: #5a4d14; --k-norm: #403c32; --k-attn: #5f2c21;
   --k-shape: #343b45; --k-loss: #5f2a24; --k-group: #2a323d; --k-other: #2a323d } }
 :root[data-theme="dark"] { color-scheme: dark;
   --paper: #0f1318; --sheet: #161b22; --card: #1e242d; --line: #2c3541; --edge: #6b7a8f; --grid: #27303b;
   --ink: #e9edf2; --pencil: #9ca9b8; --red: #ff8272; --tint: rgba(233, 237, 242, .04);
+  --c-do: #7fb2ee; --c-why: #f0b657; --c-origin: #b79cf0; --c-param: #6fd0a3; --c-term: #6cc6d2; --mark: #6b5310;
   --k-conv: #25426b; --k-pool: #234a36; --k-dense: #40306a; --k-act: #5a4d14; --k-norm: #403c32; --k-attn: #5f2c21;
   --k-shape: #343b45; --k-loss: #5f2a24; --k-group: #2a323d; --k-other: #2a323d }
 * { box-sizing: border-box }
@@ -101,7 +104,68 @@ canvas, img { image-rendering: pixelated; display: block; max-width: 100%; heigh
 .legend i { display: inline-block; width: .9rem; height: .9rem; margin-right: .35rem; vertical-align: -2px; border: 1px solid var(--edge); border-radius: 3px; background: var(--k) }
 figure { margin: 0; display: grid; gap: .7rem; min-width: 0 }
 .how { font-size: .88rem; color: var(--pencil); max-width: 46em }
-.how summary { cursor: pointer; color: var(--ink); font-weight: 600; width: max-content }
+.how summary { cursor: pointer; color: var(--ink); font-weight: 600; width: max-content; list-style: none }
+.how summary::-webkit-details-marker { display: none }
+.how p { margin: .4rem 0 0 }
+header .how { margin-top: .5rem }
+.fact { display: grid; gap: .15rem; font-size: .92rem; padding-left: .7rem; border-left: 3px solid var(--c) }
+.fact h4 { margin: 0; display: flex; align-items: center; gap: .35rem; font-size: .8rem; font-weight: 700; letter-spacing: .06em; color: var(--c) }
+.f-do { --c: var(--c-do) } .f-why { --c: var(--c-why) } .f-origin { --c: var(--c-origin) } .f-param { --c: var(--c-param) } .f-term { --c: var(--c-term) }
+.ico { display: inline-flex; width: 1.05rem; height: 1.05rem; flex: none }
+.ico svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round }
+.chip { display: inline-block; font-size: .78rem; font-weight: 700; line-height: 1.5; padding: 0 .5rem; margin-right: .4rem; border-radius: 999px; border: 1px solid currentColor; color: var(--c-param) }
+.chip.fixed { color: var(--pencil) }
+.tags { display: flex; flex-wrap: wrap; gap: .35rem }
+.tags .chip { margin: 0 }
+.chip.k-fixed { color: var(--pencil) } .chip.k-standard { color: var(--c-do) } .chip.k-named { color: var(--c-why) } .chip.k-own { color: var(--c-origin) }
+.pts { margin: .2rem 0 0; padding-left: 1.1rem; display: grid; gap: .15rem }
+.pts li::marker { color: var(--c, var(--c-do)) }
+.pts b.lead { color: var(--ink) }
+.fact > p + p { margin-top: .3rem }
+.with-mini { display: flow-root }   /* the drawing floats; the text runs beside it and then under it */
+.mini { float: left; width: 5.6rem; margin: .2rem .7rem .2rem 0; border: 1px solid var(--line); border-radius: 8px; background: var(--card); padding: .2rem }
+.mini svg { display: block; width: 100%; fill: none; stroke: var(--edge); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round }
+.mini .a { stroke: var(--c-do) } .mini .af { fill: var(--c-do); stroke: none } .mini .wf { fill: var(--c-why); stroke: none } .mini .gf { fill: var(--line); stroke: none }
+.mini text { font: 9px var(--sans); fill: var(--pencil); stroke: none; text-anchor: middle }
+.pic { margin: 0; display: grid; gap: .3rem }
+.pic img { display: block; max-width: 100%; height: auto; background: #fff; border: 1px solid var(--line); border-radius: 8px }
+.pic figcaption { font-size: .82rem; color: var(--pencil) }
+.extras { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: .9rem; margin: 0 1.2rem; padding-top: 1.1rem; border-top: 1px solid var(--line) }
+.extras .fact, .col .fact.boxed { background: var(--tint); border-radius: 0 8px 8px 0; padding: .6rem .8rem }
+b.num { font-weight: 700; color: var(--red) }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: .6rem; margin-top: .8rem; max-width: 60rem }
+.stat { background: var(--sheet); border: 1px solid var(--line); border-radius: 10px; padding: .5rem .8rem; display: grid }
+.stat b { font-size: 1.35rem; line-height: 1.3; color: var(--c-do); overflow-wrap: anywhere }
+.stat span { font-size: .82rem; color: var(--ink); font-weight: 600 }
+.stat small { font-size: .76rem; color: var(--pencil) }
+#bg { max-width: none }
+#bgtext { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: .7rem; margin-top: .5rem }
+.bgcard { background: var(--sheet); border: 1px solid var(--line); border-top: 3px solid var(--c-do); border-radius: 8px; padding: .6rem .8rem; color: var(--ink); font-size: .9rem }
+.bgcard > p > b.lead { display: block; margin: 0 0 .2rem; font-size: .95rem }
+.concept .key { font-weight: 600 }
+strong.hl { font-weight: 700; background: linear-gradient(transparent 58%, var(--mark) 58%); border-radius: 2px }
+code { font: .88em var(--mono); background: var(--tint); border: 1px solid var(--line); border-radius: 4px; padding: 0 .25em }
+abbr.term { text-decoration: underline dotted var(--c-term); text-underline-offset: 3px; cursor: help }
+b.lead { color: var(--c-do); margin-right: .5em }
+a.term { color: inherit; text-decoration: underline solid var(--c-origin); text-underline-offset: 3px; text-decoration-thickness: 2px; cursor: pointer }
+#conceptlist { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: .8rem; margin-top: .6rem; max-width: none }
+.concept { background: var(--sheet); border: 1px solid var(--line); border-top: 3px solid var(--c-origin); border-radius: 8px; padding: .7rem .9rem; display: grid; gap: .4rem; align-content: start; color: var(--ink); scroll-margin-top: 1rem }
+.concept h4 { margin: 0; font-size: 1rem; color: var(--c-origin) }
+.concept.flash { outline: 3px solid var(--mark) }
+.concept table { border-collapse: collapse; font-size: .85rem; width: 100% }
+.concept th, .concept td { text-align: left; vertical-align: top; padding: .25rem .5rem .25rem 0; border-top: 1px solid var(--line) }
+.concept th { color: var(--pencil); font-weight: 600; white-space: nowrap }
+.concept td:first-child { font-weight: 600; white-space: nowrap }
+#concepts { max-width: none; font-size: .92rem }
+#concepts > summary { font-size: 1.05rem }
+.chips { margin-top: .6rem; display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; font-size: .88rem; color: var(--pencil) }
+.chips a { color: var(--c-origin); border: 1px solid currentColor; border-radius: 999px; padding: 0 .6rem; font-weight: 600; cursor: pointer }
+.how summary { display: flex; align-items: center; gap: .35rem }
+.how summary::before { content: "▸"; color: var(--c-do) }
+.how[open] > summary::before { content: "▾" }
+.terms { margin: 0; font-size: .88rem }
+.terms dt { font-weight: 600; color: var(--ink); margin-top: .4rem }
+.terms dd { margin: 0; color: var(--pencil) }
 
 .detail { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: 1.2rem 0; padding: 1.2rem 0; background: var(--sheet); border: 1px solid var(--line); border-radius: 12px }
 .col { padding: 0 1.2rem; display: grid; gap: .8rem; align-content: start; min-width: 0; border-left: 1px solid var(--line) }
@@ -124,8 +188,8 @@ figure { margin: 0; display: grid; gap: .7rem; min-width: 0 }
 .bars .v { text-align: right }
 .tokens { display: flex; flex-wrap: wrap; gap: .3rem }
 .tokens span { font: .82rem var(--mono); border: 1px solid var(--line); background: var(--card); padding: 0 .4rem; border-radius: 4px }
-.cap { max-width: 46em; font-size: 1rem }
-.cap b { font-weight: 700 }
+.cap { max-width: 46em; font-size: 1rem; padding: .5rem .9rem; border-left: 3px solid var(--red); background: var(--sheet); border-radius: 0 8px 8px 0 }
+.cap > b:first-child { font-weight: 700; color: var(--red); margin-right: .3em }
 </style>
 
 <div class="page">
@@ -134,6 +198,19 @@ figure { margin: 0; display: grid; gap: .7rem; min-width: 0 }
     <h1 id="title"></h1>
     <p class="lede" id="summary"></p>
     <p class="lede" id="example"></p>
+    <details class="how" id="bg" hidden><summary>读图之前：这个模型在做什么</summary><div id="bgtext"></div></details>
+    <div class="stats" id="stats" hidden></div>
+    <p class="chips" id="conceptchips" hidden></p>
+    <details class="how"><summary>几个基本概念</summary>
+      <dl class="terms">
+        <dt>数据和形状</dt><dd>模型里流动的数据都是排好的一组数（张量）。“192”是一排 192 个数；“80×154”是 80 行、154 列的一张表；“32×27×154”是 32 张 27×154 的图，每一张叫一个通道。</dd>
+        <dt>特征</dt><dd>模型从原始数据里算出来的中间结果。越往后，它描述的东西越抽象：从“这里有一条边”到“这像不像某一类”。</dd>
+        <dt>参数（权重）</dt><dd>模型里可以调整的数。训练就是调整它们。面板里写着“没有可学习参数”的步骤是固定的计算，不用训练；写着多少个的，那些数是训练出来的。</dd>
+        <dt>前向计算</dt><dd>数据从输入一步步算到输出，就是这张图从左到右的过程。</dd>
+        <dt>损失</dt><dd>模型的答案和正确答案差多少，用一个数表示，越小越好。</dd>
+        <dt>梯度和反向传播</dt><dd>损失对每个数有多敏感。训练时从损失往回一步步算，告诉每个参数该往哪边调、调多少。面板里的“梯度”就是它。</dd>
+      </dl></details>
+    <details class="how" id="gloss" hidden><summary>这个模型里的名词</summary><dl class="terms" id="glosslist"></dl></details>
   </header>
   <section class="bar">
     <div class="ctl"><label for="level">详略</label><span>概括</span><input type="range" id="level" min="1" step="1"><span>详细</span><output id="lvl" for="level" class="small"></output></div>
@@ -148,6 +225,7 @@ figure { margin: 0; display: grid; gap: .7rem; min-width: 0 }
   </figure>
   <section class="detail" id="detail"></section>
   <p class="cap" id="cap"></p>
+  <details class="how" id="concepts" hidden><summary>贯穿全图的几个概念</summary><div id="conceptlist"></div></details>
 </div>
 
 <script type="application/json" id="spec">{"title":"Model Flow","root":{"name":"root","children":[{"name":"输入","type":"Input"},{"name":"model","type":"Model"}]}}</script>
@@ -210,7 +288,128 @@ leaves.forEach((b, i) => {       // "from" on a leaf, or on a group it is the fi
   for (const a of src) outs.get(a).push(b);
 });
 const norm = s => (s || '').toLowerCase().replace(/\dd|_|\d/g, '');
+const TYPE_WHY = {
+  conv: '让模型自己学会找局部的图案（图片上的边缘和纹理、谱图上的条纹）。同一组权重用在所有位置，所以参数少，图案出现在哪里都认得出。',
+  convtranspose: '需要把缩小了的特征图再放大时用，比如生成图片或逐像素的预测。',
+  relu: '没有激活函数，多少层叠起来也只相当于一层线性变换。有了它，网络才能表示弯曲、复杂的关系。', gelu: '没有激活函数，多少层叠起来也只相当于一层线性变换。有了它，网络才能表示弯曲、复杂的关系。',
+  sigmoid: '需要“概率”或“开关”时用：输出可以直接读成 0 到 1 之间的把握。', tanh: '把数值限制在固定范围里，避免越算越大。',
+  maxpool: '缩小数据，后面的计算更省；同时让结果对图案的小幅移动不那么敏感。', avgpool: '缩小数据，把一个小区域概括成一个数。',
+  adaptiveavgpool: '把一整张特征图概括成很少的几个数，输入大小不同时后面的层也能接上。',
+  flatten: '卷积输出的是多维的图，全连接层只收一排数，所以要先排成一排。',
+  linear: '把前面得到的特征重新组合：既用来改变每份数据有多少个数，也常放在最后给出分数。',
+  softmax: '把互相比较的分数变成概率，才能说模型有多大把握。', logsoftmax: '和 softmax 作用相同，取对数是为了和后面的损失配合，计算更稳定。',
+  batchnorm: '让每一层收到的数值大小保持稳定，训练更快，也不容易发散。', layernorm: '让每一层收到的数值大小保持稳定，训练更快，也不容易发散。',
+  dropout: '训练时故意丢掉一部分信息，逼模型不依赖个别的数，减少过拟合（只会背训练数据）。',
+  embedding: '编号本身没有含义。换成向量之后，意思相近的词可以有相近的向量，模型才能利用。',
+  multiheadattention: '让每个位置按需要去看别的位置，而不是只看固定的邻居。哪里重要由数据自己决定。',
+  add: '残差连接给原来的信息留一条直通的路：这一层只需要学“改动多少”，层数很多时梯度也能顺利传回去。',
+  cat: '把不同来源的信息放到一起，交给后面的层一起使用。',
+  nllloss: '把“答得有多差”变成一个数。训练就是不断调整参数，让这个数变小。', crossentropy: '把“答得有多差”变成一个数。训练就是不断调整参数，让这个数变小。', crossentropyloss: '把“答得有多差”变成一个数。训练就是不断调整参数，让这个数变小。', mseloss: '把“答得有多差”变成一个数。训练就是不断调整参数，让这个数变小。',
+};
 const descOf = n => n.desc || TYPE_DESC[norm(n.type)] || (isGroup(n) ? '一个模块，里面还有更细的步骤。' : '');
+// Emphasis in the texts of a spec: **重点** is marked, `name` is set as code, and a word from the glossary gets a dotted
+// underline with its meaning on hover (once per text). lead: a short "标签：" opening the text becomes a coloured label.
+let GLOSS = [];                  // [alias, meaning, concept card or undefined], longest alias first; filled once the spec has been read
+function show(card) {            // a concept named in a text: open the list under the title and bring its card into view
+  $('concepts').open = true; card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  card.classList.add('flash'); setTimeout(() => card.classList.remove('flash'), 1600);
+}
+function rich(text, lead, nums) {
+  if (!text) return [];
+  const used = new Set(), word = c => /[A-Za-z0-9_]/.test(c || ''), out = [];
+  if (nums) out.push = (...xs) => { for (const x of xs) typeof x === 'string'   // in a note, the numbers are what the eye should find
+    ? x.split(/([+\-−]?\d[\d,]*(?:\.\d+)?%?)/).forEach((t, i) => t && Array.prototype.push.call(out, i % 2 ? el('b', 'num', t) : t)) : Array.prototype.push.call(out, x); return out.length; };
+  const plain = s => {
+    while (s) {
+      let best = null;
+      for (const [a, m, card] of GLOSS) {
+        if (used.has(m)) continue;
+        let i = s.indexOf(a);
+        if (/^[\x00-\x7f]+$/.test(a)) while (i >= 0 && (word(s[i - 1]) || word(s[i + a.length]))) i = s.indexOf(a, i + 1);
+        if (i >= 0 && (!best || i < best[0])) best = [i, a, m, card];
+      }
+      if (!best) return out.push(s);
+      if (best[0]) out.push(s.slice(0, best[0]));
+      const t = el(best[3] ? 'a' : 'abbr', 'term', best[1]); t.title = best[2] + (best[3] ? '（点一下看完整的解释）' : ''); out.push(t); used.add(best[2]);
+      if (best[3]) { t.role = 'button'; t.tabIndex = 0; t.onclick = () => show(best[3]); }
+      s = s.slice(best[0] + best[1].length);
+    }
+  };
+  const m = lead && text.match(/^([^：:，。]{1,12})[：:]/);
+  if (m) { out.push(el('b', 'lead', m[1])); text = text.slice(m[0].length); }
+  for (const part of text.split(/(\*\*[^*]+\*\*|`[^`]+`)/)) {
+    if (part.length > 4 && part.startsWith('**') && part.endsWith('**')) out.push(el('strong', 'hl', part.slice(2, -2)));
+    else if (part.length > 2 && part.startsWith('`') && part.endsWith('`')) out.push(el('code', '', part.slice(1, -1)));
+    else plain(part);
+  }
+  return out;
+}
+// A text may be a list of strings: each is a paragraph, and one that starts with "- " is a point of a list. A point
+// (or a background paragraph) that opens with "标签：" gets the label set apart.
+function block(text, lead) {
+  const out = []; let ul = null;
+  for (const t of [text || ''].flat()) {
+    if (!t) continue;
+    if (t.startsWith('- ')) { if (!ul) out.push(ul = el('ul', 'pts')); ul.append(el('li', '', rich(t.slice(2), true))); }
+    else { ul = null; out.push(el('p', '', rich(t, lead))); }
+  }
+  return out;
+}
+const pics = n => [n.figure || []].flat().map(f => { const i = el('img'); i.src = f.image; i.alt = f.caption || ''; return el('figure', 'pic', i, f.caption && el('figcaption', '', rich(f.caption))); });
+// Small drawings of what a common layer does, shown beside its "做什么". A node can ask for one by name with "mini".
+const mCells = (x, y, c, r, z, cls = '') => Array.from({ length: c * r }, (_, i) => `<rect class="${cls}" x="${x + (i % c) * z}" y="${y + (i / c | 0) * z}" width="${z}" height="${z}"/>`).join('');
+const mTo = (x1, x2, y) => `<path class="a" d="M${x1} ${y}H${x2}m-4 -3 4 3 -4 3"/>`;
+const mAxes = '<path d="M8 44H112M60 6V52" stroke-dasharray="2 2"/>';
+const MINI = {
+  conv: mCells(6, 5, 6, 5, 9) + '<rect class="a" x="15" y="14" width="27" height="27" stroke-width="2.2"/>' + mTo(66, 84, 28) + '<rect class="af" x="90" y="19" width="18" height="18"/>',
+  pool: mCells(8, 10, 2, 2, 18) + '<text x="17" y="23">3</text><text x="35" y="23">9</text><text x="17" y="41">1</text><text x="35" y="41">4</text>' + mTo(54, 76, 28) + '<rect class="a" x="84" y="17" width="22" height="22" stroke-width="2"/><text x="95" y="32">9</text>',
+  relu: mAxes + '<path class="a" stroke-width="2.2" d="M8 44H60L104 8"/>',
+  gelu: mAxes + '<path class="a" stroke-width="2.2" d="M8 44C40 44 50 50 60 44S86 24 104 8"/>',
+  sigmoid: '<path d="M8 28H112M60 6V52" stroke-dasharray="2 2"/><path class="a" stroke-width="2.2" d="M8 48C52 48 68 8 112 8"/>',
+  linear: [10, 28, 46].flatMap(a => [18, 38].map(b => `<path d="M26 ${a}L94 ${b}"/>`)).join('') + [10, 28, 46].map(a => `<circle class="gf" cx="22" cy="${a}" r="5"/>`).join('') + [18, 38].map(b => `<circle class="af" cx="98" cy="${b}" r="5"/>`).join(''),
+  norm: [46, 6, 22, 40, 12].map((h, i) => `<rect class="gf" x="${8 + i * 8}" y="${50 - h}" width="6" height="${h}"/>`).join('') + mTo(52, 68, 28) + [24, 16, 20, 26, 18].map((h, i) => `<rect class="af" x="${74 + i * 8}" y="${40 - h}" width="6" height="${h}"/>`).join(''),
+  attention: [.6, 3.2, 1, .6, 2].map((w, i) => `<path class="a" stroke-width="${w}" d="M60 13L${20 + i * 20} 36"/>`).join('') + '<circle class="wf" cx="60" cy="9" r="5"/>' + [0, 1, 2, 3, 4].map(i => `<rect class="gf" x="${12 + i * 20}" y="37" width="16" height="12" rx="2"/>`).join(''),
+  add: '<path d="M8 14H46L64 26M8 42H46L64 30"/><circle class="a" cx="72" cy="28" r="8"/><path class="a" d="M68 28h8M72 24v8"/>' + mTo(82, 110, 28),
+  cat: '<rect class="gf" x="8" y="9" width="30" height="14"/><rect class="af" x="8" y="33" width="30" height="14"/>' + mTo(46, 64, 28) + '<rect class="gf" x="70" y="21" width="21" height="14"/><rect class="af" x="91" y="21" width="21" height="14"/>',
+  softmax: [30, 12, 44, 20].map((h, i) => `<rect class="gf" x="${8 + i * 9}" y="${50 - h}" width="7" height="${h}"/>`).join('') + mTo(48, 64, 28) + [14, 6, 22, 9].map((h, i) => `<rect class="af" x="${70 + i * 9}" y="${44 - h}" width="7" height="${h}"/>`).join('') + '<text x="88" y="54">和 = 1</text>',
+  dropout: Array.from({ length: 10 }, (_, i) => [1, 4, 7].includes(i) ? `<path d="M${17 + (i % 5) * 20} ${13 + (i / 5 | 0) * 24}l8 8m0 -8l-8 8"/>` : `<circle class="af" cx="${21 + (i % 5) * 20}" cy="${17 + (i / 5 | 0) * 24}" r="5"/>`).join(''),
+};
+Object.entries({ maxpool: 'pool', avgpool: 'pool', adaptiveavgpool: 'pool', batchnorm: 'norm', layernorm: 'norm', groupnorm: 'norm', multiheadattention: 'attention', convtranspose: 'conv', logsoftmax: 'softmax' }).forEach(([k, v]) => MINI[k] = MINI[v]);
+function miniOf(n) {
+  const svg = MINI[n.mini] || (!isGroup(n) && MINI[norm(n.type)]);
+  if (!svg) return null;
+  const d = el('div', 'mini'); d.innerHTML = `<svg viewBox="0 0 120 56" aria-hidden="true">${svg}</svg>`; return d;
+}
+const ORIGIN = { fixed: '固定计算', standard: '标准做法', named: '知名结构', own: '项目自创' };
+const ICON = {
+  do: '<path d="M2.5 8h9.5M8.5 4.5 12 8l-3.5 3.5"/>',
+  why: '<circle cx="8" cy="8" r="6.3"/><path d="M6.2 6.4a1.9 1.9 0 1 1 2.7 1.7c-.6.3-.9.7-.9 1.4"/><path d="M8 11.6v.1"/>',
+  origin: '<path d="M2.5 3.5h4a1.5 1.5 0 0 1 1.5 1 1.5 1.5 0 0 1 1.5-1h4v8.5h-4a1.5 1.5 0 0 0-1.5 1 1.5 1.5 0 0 0-1.5-1h-4zM8 4.5V13"/>',
+  param: '<path d="M2.5 5h11M2.5 11h11"/><circle cx="6" cy="5" r="1.7" fill="var(--sheet)"/><circle cx="10.5" cy="11" r="1.7" fill="var(--sheet)"/>',
+  term: '<path d="M2.5 3h11v7.5H8L5 13v-2.5H2.5z"/>',
+};
+const ico = k => { const s = el('span', 'ico'); s.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${ICON[k]}</svg>`; return s; };
+const fact = (k, label, ...body) => el('div', 'fact f-' + k, el('h4', '', ico(k), label), body);
+const whyOf = n => n.why || (isGroup(n) ? '' : TYPE_WHY[norm(n.type)] || '');
+const under = n => isGroup(n) ? n.children.flatMap(under) : [n];
+function paramsOf(n) {           // a leaf's own count; for a module, its steps added up, a module that is called twice counted once
+  if (n.params != null || !isGroup(n)) return n.params ?? null;
+  const seen = new Set(), ls = under(n).filter(l => l.params != null && !seen.has(l.module ?? l) && seen.add(l.module ?? l));
+  return ls.length ? ls.reduce((s, l) => s + l.params, 0) : null;
+}
+function facts(n) {              // what a newcomer needs beside "what it does": why it is there, where it comes from, whether it is learned
+  const p = paramsOf(n), terms = Object.entries(n.terms || {}), num = p == null ? '' : p.toLocaleString('en-US');
+  const tag = (cls, text, tip) => { const c = el('span', 'chip ' + cls, text); c.title = tip; return c; };
+  const ok = n.origin_kind || (!isGroup(n) && !isInput(n) && TYPE_DESC[norm(n.type)] ? 'standard' : null);   // a layer the page knows is a standard one
+  const tags = [ORIGIN[ok] && tag('k-' + ok, ORIGIN[ok], '这一步的来历' + (n.origin ? '，见“来历”一栏' : '')),
+    p != null && (p ? tag('', num + ' 个参数', isInput(n) ? '这不是输入的数据，是模型训练出来的一组数' : '这些数是训练出来的' + (isGroup(n) ? '（里面各步合计）' : ''))
+      : tag('fixed', '无参数 · 不用训练', '这是固定的计算，没有需要训练的数'))].filter(Boolean);
+  return {                       // main: beside the data, in the middle column; extra: a row of cards across the panel
+    main: [tags.length ? el('div', 'tags', tags) : null, descOf(n) && fact('do', '做什么', el('div', 'with-mini', miniOf(n), el('div', '', block(descOf(n))))), pics(n)],
+    extra: [whyOf(n) && fact('why', '为什么需要', block(whyOf(n))), n.origin && fact('origin', '来历', block(n.origin)),
+      terms.length && fact('term', '名词', el('dl', 'terms', terms.map(([k, v]) => [el('dt', '', k), el('dd', '', v)])))].filter(Boolean),
+  };
+}
 const kindOf = n => n.kind || (isGroup(n) ? 'group' : (KINDS.find(k => k[1].test(n.type || '')) || ['other'])[0]);
 const gnorm = n => typeof n.grad === 'number' ? n.grad : n.grad?.data ? Math.hypot(...n.grad.data) : null;
 const shapeStr = t => !t ? '' : t.tokens && !t.shape ? t.tokens.length + ' 项' : (t.full ?? t.shape ?? []).join('×') || '1 个数';
@@ -312,7 +511,9 @@ function build() {
     if (multi) multi.style.zoom = made.length > 2 ? .36 : .5;
     const wide = [...n.name].reduce((w, c) => w + (c.charCodeAt(0) > 255 ? 13 : 7.2), 0) > 80;     // a name that will not fit on one line: smaller, so that two lines fit
     const pick = el('button', 'pick', el('span', wide ? 'head long' : 'head', n.name.replace(/[_.](?=\w)/g, '$&​')),el('span', 'thumb', multi || thumb(t)), el('span', '', many ? made.length + ' 路输出' : shapeStr(t)));
-    pick.onclick = () => go(input ? 0 : V.ops.indexOf(n) + 1);
+    // a step: playback goes there. An input (the sample, the label, a learned table) is not a step: show that one card
+    // alone, and leave playback where it is
+    pick.onclick = () => { if (input) { stop(); picked = n; detail(); } else go(V.ops.indexOf(n) + 1); };
     if (!input) pick.title = n.type || '模块';
     const c = el('div', 'card' + (input ? ' in' : isGroup(n) ? ' group' : ''), pick);
     c.style.setProperty('--k', `var(--k-${kindOf(n)})`);
@@ -499,23 +700,39 @@ function gradOf(leaf) {
   return g == null ? null : el('div', 'io', el('div', 'lab', el('span', '', '梯度 ∂损失/∂这份数据'), el('span', 'mono', '范数 ' + (g >= 0.001 ? g.toFixed(4) : g.toExponential(1)))),
     leaf.grad?.data ? viz(leaf.grad) : null, small('反向传播回到这里时的梯度。颜色越深，说明这里稍微变一点，损失就变得越多。'));
 }
+let picked = null;               // an input card the reader clicked: the panel shows it until playback moves
 function detail() {
   const cur = V.ops[step - 1], col = (title, ...body) => el('div', 'col', el('h3', '', title), body);
-  if (!cur) {
-    $('detail').replaceChildren(...leaves.filter(isInput).map(l => col(l.name, el('p', '', descOf(l)), io(l, '数据'), l.note ? el('p', 'cap', l.note) : null, gradOf(l))));
-    return $('cap').replaceChildren(el('b', '', '起点。'), SPEC.example || '这些是送进来的数据，还没有经过任何处理。');
+  if (picked) {                  // one input, on its own: what it is, the data, who uses it
+    const l = picked, f = facts(l), users = [...new Set(outs.get(l).map(rep))];
+    $('detail').replaceChildren(...[
+      col('这份数据', el('h2', '', l.name), el('div', 'mono', l.params != null ? '模型学出来的参数，不是输入的样本' : '从外面送进来的数据'), f.main),
+      col('内容', io(l, '数据'), gradOf(l)),
+      col('谁用它', users.length ? el('ul', 'pts', users.map(u => el('li', '', u.name))) : small('没有步骤直接读它。')),
+      f.extra.length && el('div', 'extras', f.extra)].filter(Boolean));
+    return $('cap').replaceChildren(el('b', '', `${l.name}。`), ...rich(l.note, false, true));
+  }
+  if (!cur) {                    // the start: every input at a glance; a click on one of them tells the rest
+    $('detail').replaceChildren(...leaves.filter(isInput).map(l => {
+      const c = col(l.name, el('p', '', rich([descOf(l)].flat()[0])), io(l, '数据'));
+      c.style.cursor = 'pointer'; c.title = '点一下看详细说明'; c.onclick = () => { picked = l; detail(); };
+      return c;
+    }));
+    return $('cap').replaceChildren(el('b', '', '起点。'), ...rich(SPEC.example || '这些是送进来的数据，还没有经过任何处理。'), ' 点任何一份数据的方框，看它的说明。');
   }
   // what comes in: data from other boxes, and any input that enters inside this one
   const ins = V.data.filter(d => d.cons.includes(cur)).map(d => d.leaf).concat(leaves.filter(l => isInput(l) && rep(l) === cur));
   const made = V.data.filter(d => d.prod === cur), exp = isGroup(cur) && el('button', '', '展开看里面');
   if (exp) exp.onclick = () => toggle(cur);
-  $('detail').replaceChildren(
+  const f = facts(cur);
+  $('detail').replaceChildren(...[
     col('进来', ins.length ? ins.map(l => io(l, '来自 ' + l.name)) : small('这一步没有输入数据。')),
-    col('这一步', el('h2', '', cur.name), el('div', 'mono', [cur.type, cur.src].filter(Boolean).join(' · ')), el('p', '', descOf(cur)),
+    col('这一步', el('h2', '', cur.name), el('div', 'mono', [cur.type, cur.src].filter(Boolean).join(' · ')), f.main,
       exp && [small('里面依次是：' + cur.children.map(c => c.name).join(' → ')), el('div', '', exp)]),
     col('出去', made.map(d => [io(d.leaf, made.length > 1 || isGroup(cur) ? d.leaf.name + ' 的输出' : '输出'),
-      ...Object.entries(d.leaf.also || {}).map(([k, t]) => io({ out: t }, k)), gradOf(d.leaf)])));
-  $('cap').replaceChildren(el('b', '', `第 ${step} 步，共 ${V.ops.length} 步：${cur.name}。`), cur.note || '');
+      ...Object.entries(d.leaf.also || {}).map(([k, t]) => io({ out: t }, k)), gradOf(d.leaf)])),
+    f.extra.length && el('div', 'extras', f.extra)].filter(Boolean));
+  $('cap').replaceChildren(el('b', '', `第 ${step} 步，共 ${V.ops.length} 步：${cur.name}。`), ...rich(cur.note, false, true));
 }
 function ui() {
   const K = V.ops.length;
@@ -524,7 +741,7 @@ function ui() {
   $('pos').textContent = step ? `第 ${step} 步，共 ${K} 步` : `起点，共 ${K} 步`;
 }
 const stop = () => { clearInterval(timer); timer = 0; };
-function to(i) { step = Math.max(0, Math.min(V.ops.length, i)); paint(true); detail(); ui(); }
+function to(i) { picked = null; step = Math.max(0, Math.min(V.ops.length, i)); paint(true); detail(); ui(); }
 function go(i) { stop(); to(i); }
 function play() {
   if (timer) { stop(); return ui(); }
@@ -622,12 +839,33 @@ function pick(i) {
   const v = VAR.items[i];
   for (const id in v.nodes) Object.assign(byId.get(id), v.nodes[id]);
   SPEC.example = v.example ?? EXAMPLE;
-  $('variant').value = i; $('vname').textContent = v.name; $('example').textContent = SPEC.example ? '跟踪的实例：' + SPEC.example : '';
+  $('variant').value = i; $('vname').textContent = v.name; $('example').replaceChildren(...rich(SPEC.example ? '跟踪的实例：' + SPEC.example : '', true));
 }
 
 document.title = SPEC.title || document.title;
-$('title').textContent = SPEC.title || ''; $('src').textContent = SPEC.source || ''; $('summary').textContent = SPEC.summary || '';
-$('example').textContent = SPEC.example ? '跟踪的实例：' + SPEC.example : '';
+{ const g = Object.entries({ ...Object.assign({}, ...all.map(n => n.terms || {})), ...SPEC.glossary });
+  // concepts: the things many boxes refer to (the five questions, a token, the memory). One card each under the title;
+  // wherever a text names one, the word links to its card. They come before plain terms of the same spelling.
+  const cards = (SPEC.concepts || []).map(c => [c, el('div', 'concept', el('h4', '', c.name))]);
+  GLOSS = [...cards.flatMap(([c, card]) => [c.name, ...(c.aliases || [])].map(a => [a, c.short || c.text.replace(/\*\*|`/g, '').split('。')[0] + '。', card])),
+    ...g.flatMap(([k, v]) => [k, ...k.split(/\s*\/\s*|\s+/)].filter((a, i, l) => a.length >= 2 && l.indexOf(a) === i).map(a => [a, v]))].sort((a, b) => b[0].length - a[0].length);
+  for (const [c, card] of cards) {
+    const own = GLOSS.filter(e => e[2] === card); GLOSS = GLOSS.filter(e => e[2] !== card);   // a card does not link to itself
+    card.append(...[c.short && el('p', 'key', rich(c.short)), pics(c),
+      c.table && el('table', '', c.table.head && el('tr', '', c.table.head.map(h => el('th', '', h))), c.table.rows.map(r => el('tr', '', r.map(v => el('td', '', rich(String(v))))))),
+      block(c.text), c.after && el('p', 'small', rich(c.after))].flat().filter(Boolean));
+    GLOSS = [...GLOSS, ...own].sort((a, b) => b[0].length - a[0].length);
+  }
+  if (cards.length) {
+    $('concepts').hidden = false; $('concepts').open = true; $('conceptlist').replaceChildren(...cards.map(c => c[1]));
+    $('conceptchips').hidden = false;   // the cards sit below the figure, so that the figure stays near the top; these lead to them
+    $('conceptchips').replaceChildren('贯穿全图的概念（点开看解释）', ...cards.map(([c, card]) => { const a = el('a', '', c.name); a.role = 'button'; a.tabIndex = 0; a.onclick = () => show(card); return a; }));
+  }
+  if (SPEC.background) { $('bg').hidden = false; $('bg').open = true; $('bgtext').replaceChildren(...[SPEC.background].flat().map(t => el('div', 'bgcard', block(t, true)))); }
+  if (SPEC.stats) { $('stats').hidden = false; $('stats').replaceChildren(...SPEC.stats.map(([label, value, sub]) => el('div', 'stat', el('b', '', String(value)), el('span', '', label), sub && el('small', '', sub)))); }
+  if (g.length) { $('gloss').hidden = false; $('glosslist').replaceChildren(...g.flatMap(([k, v]) => [el('dt', '', k), el('dd', '', v)])); } }
+$('title').textContent = SPEC.title || ''; $('src').textContent = SPEC.source || ''; $('summary').replaceChildren(...rich(SPEC.summary));
+$('example').replaceChildren(...rich(SPEC.example ? '跟踪的实例：' + SPEC.example : '', true));
 if (VAR) {
   $('vctl').hidden = false; $('vlab').textContent = VAR.label || '版本'; $('variant').max = VAR.items.length - 1;
   $('variant').oninput = e => { stop(); pick(+e.target.value); build(); };

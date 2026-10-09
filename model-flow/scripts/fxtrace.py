@@ -100,9 +100,33 @@ def _where(stack):
     return f"{os.path.basename(hits[-1][0])}:{hits[-1][1]}" if hits else None
 
 
+class _Tracer(fx.Tracer):
+    """Notes on every node which module calls it sits in, a repeat call numbered ("enc", then "enc@1"). Recent torch
+    keeps this in nn_module_stack itself; older torch (2.5 and before) gives both calls the same name there, and a
+    tower that is used twice would then be drawn as one."""
+
+    def __init__(self):
+        super().__init__()
+        self.calls, self.inside = {}, []
+
+    def call_module(self, m, forward, args, kwargs):
+        q = self.path_of_module(m)
+        k = self.calls[q] = self.calls.get(q, -1) + 1
+        self.inside.append(q + (f"@{k}" if k else ""))
+        try:
+            return super().call_module(m, forward, args, kwargs)
+        finally:
+            self.inside.pop()
+
+    def create_node(self, *a, **kw):
+        n = super().create_node(*a, **kw)
+        n.meta["calls"] = list(self.inside)
+        return n
+
+
 def _fx(model, args, kw):
     """Steps are the fx graph nodes that yield a tensor; edges are the graph's own."""
-    tracer = fx.Tracer()
+    tracer = _Tracer()
     tracer.record_stack_traces = True
     gm = fx.GraphModule(model, tracer.trace(model))
     for n in gm.graph.nodes:
@@ -134,7 +158,7 @@ def _fx(model, args, kw):
             if not n.users or not torch.is_tensor(out_n) or (len(frm) == 1 and out_n is kept[frm[0]]):
                 alias[n.name] = frm
                 continue
-        path = list(n.meta.get("nn_module_stack", {}))  # the module calls this node sits in; fx marks a repeat call "name@1"
+        path = list(n.meta.get("calls", []))  # the module calls this node sits in; a repeat call is "name@1"
         if n.op in ("placeholder", "get_attr"):  # data from outside: the sample, or a parameter forward uses directly
             typ, name, frm = "Input", n.target.split(".")[-1], None
         elif n.op == "call_module":
@@ -142,7 +166,8 @@ def _fx(model, args, kw):
         else:
             typ, name = getattr(n.target, "__name__", str(n.target)), n.name
         kept[n.name] = ts[0]
-        recs.append(dict(id=n.name, name=name, type=typ, path=path, ts=ts, vals=vals, frm=frm, src=_where(n.stack_trace)))
+        recs.append(dict(id=n.name, name=name, type=typ, path=path, ts=ts, vals=vals, frm=frm, src=_where(n.stack_trace),
+                         mod=n.target if n.op == "call_module" else None, par=n.target if n.op == "get_attr" else None))
     return recs, last, out
 
 
@@ -188,9 +213,9 @@ def _hooks(model, args, kw):
                 todo += back(f)
         return found, loose, seen
 
-    def add(base, name, typ, path, ts, frm, src, fn=None, at=None):
+    def add(base, name, typ, path, ts, frm, src, fn=None, at=None, mod=None, par=None):
         c = count[base] = count.get(base, -1) + 1
-        r = dict(id=base + (f"_{c}" if c else ""), name=name, type=typ, path=path, ts=ts, vals=_keep(ts), frm=frm, src=src, fn=fn, ver=ts[0]._version)
+        r = dict(id=base + (f"_{c}" if c else ""), name=name, type=typ, path=path, ts=ts, vals=_keep(ts), frm=frm, src=src, fn=fn, ver=ts[0]._version, mod=mod, par=par)
         recs.insert(len(recs) if at is None else at, r)
         for t in ts:
             made[key(t)] = r
@@ -198,7 +223,7 @@ def _hooks(model, args, kw):
 
     def sources(starts, path):  # the steps these read, in order; a weight used directly becomes an input step on the spot
         found, loose, _ = walk(starts)
-        found += [add(weights[id(v)].replace(".", "_"), weights[id(v)].split(".")[-1], "Input", path, [v], None, None) for v in loose]
+        found += [add(weights[id(v)].replace(".", "_"), weights[id(v)].split(".")[-1], "Input", path, [v], None, None, par=weights[id(v)]) for v in loose]
         return sorted({id(r): r for r in found}.values(), key=recs.index)
 
     def between(ts, path, since):
@@ -234,7 +259,7 @@ def _hooks(model, args, kw):
         innermost, frm, src, call, since = stack.pop()
         ts, path = _tensors(out), [f[3] for f in stack]
         if innermost and ts:
-            add(ids[m].replace(".", "_"), ids[m].split(".")[-1], type(m).__name__, path, ts, frm, src)
+            add(ids[m].replace(".", "_"), ids[m].split(".")[-1], type(m).__name__, path, ts, frm, src, mod=ids[m])
         else:
             between(ts, [*path, call], since)
 
@@ -289,6 +314,16 @@ def trace(model, x, loss_fn=None, target=None, hooks=None, **size):
                 break
             recs = kept
     leaves = [_leaf(**{k: r[k] for k in ("id", "name", "type", "path", "ts", "vals", "frm", "src")}, size=size) for r in recs]
+    # what is learned at each step, so the page can tell a fixed computation from a trained one: "params" counts the
+    # module's (or the directly used parameter's) numbers, "module" names it so that a module called twice counts once
+    mods, pars = dict(model.named_modules()), dict(model.named_parameters())
+    for r, leaf in zip(recs, leaves):
+        if r.get("mod") in mods:
+            leaf.update(module=r["mod"], params=sum(q.numel() for q in mods[r["mod"]].parameters()))
+        elif r.get("par") in pars:
+            leaf.update(module=r["par"], params=pars[r["par"]].numel())
+        elif leaf["type"] != "Input":
+            leaf["params"] = 0
     raw = {f"{r['id']}.{k}" if k else r["id"]: v for r in recs for k, v in enumerate(r["vals"])}
     model.zero_grad()
     if loss is not None:
@@ -297,7 +332,7 @@ def trace(model, x, loss_fn=None, target=None, hooks=None, **size):
             leaves.append({"id": "target", "name": "target", "type": "Input", "path": [], "out": shown})
             last = [*last, "target"]
         leaves.append({"id": "loss", "name": "loss", "type": getattr(loss_fn, "__name__", type(loss_fn).__name__),
-                       "path": [], "from": last, "out": tensor(loss)})
+                       "path": [], "from": last, "out": tensor(loss), "params": 0})
         raw.update(loss=loss.detach(), target=target)
     return leaves, raw
 
