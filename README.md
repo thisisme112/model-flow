@@ -1,9 +1,8 @@
+**中文** | [English](README.en.md)
+
 # model-flow
 
 model-flow 是一个 [Claude Code](https://claude.com/claude-code) 技能（skill），用于将机器学习或深度学习项目转换为可交互的模型框架图。输出为单个自包含的 HTML 页面，以一条真实样本为线索，展示数据从输入到损失的完整计算过程。
-
-*A Claude skill that turns an ML/DL project into an interactive, paper-style framework diagram: one self-contained
-HTML page that follows one real example from input to loss.*
 
 ![孪生网络示例页面：顶部为背景介绍与关键数值，中部为两座 ResNet-18 塔并排的框架图，底部为当前步骤的说明](docs/siamese.png)
 
