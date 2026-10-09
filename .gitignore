@@ -3,3 +3,4 @@ demo/pytorch-examples/data/
 __pycache__/
 dist/
 CLAUDE.md
+promo/
