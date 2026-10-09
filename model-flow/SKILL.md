@@ -40,6 +40,7 @@ makes the page worth more than a sketch:
 | Path | What it is | When |
 |---|---|---|
 | `scripts/fxtrace.py` | Traces one example through a PyTorch model: steps, edges, activations, gradients, source lines. `python fxtrace.py` self-checks. | Step 4 |
+| `scripts/figure.py` | `picture(fig, caption)` turns a matplotlib figure into a spec picture. First it reads the figure back and corrects text that lies on other text, on a plotted line or on the frame, a legend that hides data, and crowded tick labels; it prints what it moved and what it could not fix. `python figure.py` self-checks. | Step 5 |
 | `scripts/deps.py` | Lists what a project imports and what an interpreter is missing; prints the install command. Installs nothing. | Step 2 |
 | `scripts/build.py` | `python build.py spec.json page.html` puts a spec into the viewer; checks ids and edges first. | Step 6 |
 | `scripts/check.py` | Opens a built page in a headless browser at desktop and phone width, reports arrow problems and script errors, saves screenshots. | Step 6 |
@@ -68,6 +69,7 @@ Work in a folder of your own inside the project, `model-flow/` by default:
 ```
 <project>/model-flow/
   fxtrace.py        copied from <skill>/scripts, so the glue script runs on its own later
+  figure.py         copied likewise: saves the figures you draw, after untangling their text
   spec.py           the glue script you write (Step 5)
   spec.json         what it writes
   <name>.html       the page
@@ -219,7 +221,9 @@ sentences and paragraphs that break the first two.
 4. **Pictures with the words.** Common layers get a small drawing of what they do automatically; give `mini` to
    your own steps that work like one. Wherever a sentence describes something that can be seen (which region a
    question reads, where the bands are cut, how five numbers add up), draw it from this example's own tensors with
-   matplotlib and attach it as `figure`: on the node, and on the concept card that explains the idea.
+   matplotlib and attach it as `figure`: on the node, and on the concept card that explains the idea. Save every
+   figure with `picture(fig, caption)` from `figure.py`, never with `savefig` directly: it corrects overlapping
+   text before saving, the same "draw first, read back, correct" the page does for its arrows.
 
 The marks, which work in `summary`, `example`, `background`, `desc`, `why`, `origin` and `note`:
 
@@ -293,6 +297,8 @@ interesting one for this example, what the surprising number is. Then report pla
 | the page is blank | the spec could not be drawn | `check.py` prints the page's own error |
 | the page is many MB | hundreds of steps at full size | `trace(..., max_hw=24)`, fewer channels for attention maps (`tensor(t, max_c=4)`) |
 | thumbnails are solid or empty | the tensor is all one value, or a huge range hides the rest | say so in the note; it may be the truth (a dead layer, a mask) |
+| the glue script prints `figure …: TEXT STILL OVERLAPS` | `picture()` found text on text in a figure and had no free place to move it to | fix the figure in the script: shorter labels, fewer of them, a larger figure, or a second panel; rerun until the line is gone |
+| a label in a figure ended up away from the thing it names | `picture()` moved it off other text or off a line | place it yourself where there is room (`xytext=`), or leave the legend without `loc=`; what it moved is printed as `figure …: moved …` |
 | numbers look wrong for a layer followed by an in-place op | an old tracer | the bundled one copies values when it records them |
 
 ## Limits, so you can say them

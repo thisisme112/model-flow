@@ -2,8 +2,8 @@
 
     <python> model-flow/spec.py model-flow/spec.json
 
-Copy this file to model-flow/spec.py in the project and fill in the parts marked TODO. fxtrace.py sits next to it
-(copied from the skill's scripts/). Complete scripts for four real projects are in the skill's examples/.
+Copy this file to model-flow/spec.py in the project and fill in the parts marked TODO. fxtrace.py and figure.py sit
+next to it (copied from the skill's scripts/). Complete scripts for four real projects are in the skill's examples/.
 """
 import json
 import os
@@ -76,7 +76,9 @@ def fold(leaf, reader, label):
 # its terms (terms). trace() has already counted "params". Short sentences; parallel parts as points:
 #     desc=["把波形变成一张图。", "- 横向：时间", "- 纵向：频率"]
 # one **marked** phrase per text, code names in `backticks`, origin_kind for the badge, and a figure drawn from raw
-# wherever the text describes something one can see. See "Easy to read" in references/glue.md. -----------------------
+# wherever the text describes something one can see. See "Easy to read" in references/glue.md.
+# A figure: draw it with matplotlib, then  node["figure"] = picture(fig, "caption")  (from figure import picture):
+# that untangles overlapping text before it saves, and prints what it could not fix. --------------------------------
 for n in leaves:
     t = raw.get(n["id"])
     if n["type"] == "Input" or t is None:

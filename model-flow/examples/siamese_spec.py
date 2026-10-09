@@ -7,8 +7,6 @@ The first run trains one epoch with main.py's own train() (a few minutes on a CP
 Needs matplotlib for the two figures (the pair, and where its score falls among the other test pairs).
 """
 import argparse
-import base64
-import io
 import json
 import os
 import random
@@ -24,6 +22,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 sys.path[:0] = [os.getcwd(), os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")]
+from figure import picture  # noqa: E402
 from fxtrace import nest, trace  # noqa: E402
 from main import APP_MATCHER, SiameseNetwork, train  # noqa: E402
 
@@ -86,13 +85,6 @@ def change(n):  # what a step or a module turns its input into
     return f"{dims(raw[first(n)['from'][0]])} 变成 {dims(raw[last(n)['id']])}。"
 
 
-def png(fig, caption):
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=90, facecolor="white")
-    plt.close(fig)
-    return {"image": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(), "caption": caption}
-
-
 def fig_pair():
     fig, axes = plt.subplots(1, 2, figsize=(3.4, 1.9), constrained_layout=True)
     for ax, k, tag in zip(axes, (i, j), "AB"):
@@ -100,7 +92,7 @@ def fig_pair():
         ax.set_title(f"图 {tag}：测试集第 {k} 张，“{int(digit[k])}”", fontsize=8)
         ax.axis("off")
     fig.suptitle(f"模型：{p:.1%} 的把握是同一个数字", fontsize=10, color="#c8372d")
-    return png(fig, "这次跟踪的一对图。两张都是同一个数字，但写法不一样。")
+    return picture(fig, "这次跟踪的一对图。两张都是同一个数字，但写法不一样。")
 
 
 def fig_scores():
@@ -115,8 +107,8 @@ def fig_scores():
     ax.set_xlabel("模型给出的概率：两张图是同一个数字")
     ax.set_ylabel("多少对")
     ax.set_yscale("log")
-    ax.legend(fontsize=8, frameon=False, loc="upper center")
-    return png(fig, "蓝色应该靠右，橙色应该靠左。虚线是 0.5 的分界；红线是这一对，刚过线。")
+    ax.legend(fontsize=8, frameon=False)  # no fixed place: where the bars and this pair's label fall depends on the data; picture() finds a free one
+    return picture(fig, "蓝色应该靠右，橙色应该靠左。虚线是 0.5 的分界；红线是这一对，刚过线。")
 
 
 PAIR, SCORES = fig_pair(), fig_scores()

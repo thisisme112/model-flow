@@ -24,6 +24,7 @@ HTML page that follows one real example from input to loss.*
 - **写给初学者的说明**：每个方框都回答四个问题——做什么、为什么需要、来历（是固定计算、标准做法、知名结构还是项目自创）、有没有要训练的参数；用到的名词当场解释。
 - **读图之前**：标题下面几张卡片讲清任务是什么、进去什么出来什么、模型的想法、怎么训练。
 - **概念卡片**：好几个方框都提到的东西（比如“两座塔”“注意力”）单独一张卡片，配表格和用这个样本画的说明图，正文里提到它的地方都能点过去。
+- **画完会自己检查**：框架图的连线画完后读一遍，纠正穿过方框和互相重叠的线；说明图保存前也读一遍，文字压在别的文字、曲线或边框上，图例挡住数据，刻度挤在一起，都会自动挪开，挪不开的会报出来。
 - **分支并排**：双塔、残差支路、注意力的 Q / K / V 画成上下并排的几行。
 - **重复的块只展开第一个**（标 ×N），其余点“＋”再看。
 - **浅色 / 深色**两种外观，**导出 SVG** 放进论文或幻灯片。
@@ -134,6 +135,7 @@ Claude 会先用两三行告诉你它要画哪个模型、用哪个样本、文�
 ```bash
 python model-flow/scripts/fxtrace.py                      # 跟踪器自检
 python model-flow/scripts/deps.py <项目目录> <模型文件>     # 这个项目用了哪些包、当前环境缺哪些
+python model-flow/scripts/figure.py                       # 说明图的文字重叠修复自检
 python model-flow/scripts/build.py spec.json page.html    # 把数据放进页面
 python model-flow/scripts/check.py page.html --shots shots # 无界面打开页面，检查连线并截图
 ```
@@ -155,7 +157,7 @@ tree = nest(leaves, model)                       # 按模块调用分好组的�
 | `model-flow/` | skill 本体，安装的就是这个文件夹 |
 | `model-flow/SKILL.md` | Claude 照着做的七个步骤 |
 | `model-flow/references/` | 环境和安装、跟踪、分组和写说明、数据格式、怎么演示 |
-| `model-flow/scripts/` | 跟踪器、依赖检查、生成页面、回读检查 |
+| `model-flow/scripts/` | 跟踪器、依赖检查、说明图保存和文字重叠修复、生成页面、回读检查 |
 | `model-flow/assets/viewer.html` | 通用页面 |
 | `examples/` | 六个生成好的页面和它们的数据 |
 | `demo/` | 示例用到的项目源码和图片 |

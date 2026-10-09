@@ -8,9 +8,7 @@ The first run trains (a few minutes on a CPU) and leaves the kept weights in mni
 Needs matplotlib for the one figure (how the answer changes during training).
 """
 import argparse
-import base64
 import copy
-import io
 import json
 import os
 import sys
@@ -25,6 +23,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 sys.path[:0] = [os.getcwd(), os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")]
+from figure import picture  # noqa: E402
 from fxtrace import trace, variant  # noqa: E402
 from main import Net, train  # noqa: E402
 
@@ -150,10 +149,7 @@ def fig_progress():
     ax.set_ylim(0, 1.12)
     ax.set_xlabel("训练了多少步（一步 = 64 张图）")
     ax.legend(loc="center right", fontsize=8, frameon=False)
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=90, facecolor="white")
-    plt.close(fig)
-    return {"image": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(), "caption": "横向是训练进度。蓝线：全部 1 万张测试图答对的比例；红线：模型给这张图正确答案的概率。"}
+    return picture(fig, "横向是训练进度。蓝线：全部 1 万张测试图答对的比例；红线：模型给这张图正确答案的概率。")
 
 
 PROGRESS = fig_progress()

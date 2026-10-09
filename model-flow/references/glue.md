@@ -265,6 +265,22 @@ an argument, so it stays prose); an `origin` is a verdict and one to three point
 - A figure shows this run, so it obeys "never invent numbers": computed from `raw`, in the script. Use one figure in
   both places it explains (the node and the concept card). White background, a font that has the page's language
   (`plt.rcParams["font.sans-serif"]`), about 5 inches wide at 90 dpi so that four or five figures stay under 1 MB.
+- **Save it with `picture(fig, caption)`** (`from figure import picture`; `kind="jpeg"` when the figure contains a
+  photo). It returns the `{"image", "caption"}` object, and before saving it reads the figure back and corrects
+  what is on top of something else. Where a label lands depends on this example's numbers, so a place that was
+  free for one sample is taken for the next; do not try to get it right by hand, draw and let it correct:
+  - x tick labels that run into each other are turned, 40° or upright;
+  - a legend lying on text or on bars, lines or points goes to the place that covers no text and the least data
+    (so leave `loc=` out unless you have a reason);
+  - a label or annotation cut off by the edge of the figure comes back onto it; one on other text slides to the
+    nearest free spot; one that a plotted line runs through, or that touches the frame, does so when a clear spot
+    is near.
+
+  It prints one line per figure it changed (`figure …: moved the legend to a free place; moved “这一对”`). A line
+  with `TEXT STILL OVERLAPS` means there was no room: the figure has too much text for its size, and that is
+  yours to fix. Labels set inside bars on purpose stay where they are; text on a slant is judged by its upright
+  box and may be reported when it is fine. Look at the figures in the built page all the same: the pass sees
+  text, lines and frames, not whether a label still reads as belonging to its point.
 - No decoration: an icon or a picture that carries no information is noise.
 
 ### Emphasis
@@ -379,6 +395,7 @@ Whenever you replace `out`, the note must agree with what is now drawn.
 - [ ] `build.py` reports no heavy wording; parallel content is in points, tables or tiles, not in sentences.
 - [ ] Every group and every concept that describes something visible has a `figure` drawn from `raw`; the project's
       own pooling-, attention- or add-like steps have a `mini`.
+- [ ] Every figure is saved with `picture()`, and the script prints no `TEXT STILL OVERLAPS`.
 - [ ] Every group has an `origin_kind`; the page has `stats`.
 - [ ] Each `origin`, each group's `why` and each note that states a result has one `**marked**` phrase; code names
       are in backticks; background paragraphs start with a label.

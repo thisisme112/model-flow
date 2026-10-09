@@ -5,8 +5,6 @@
 Needs `transformers` and matplotlib; the first run downloads distilgpt2 (about 350 MB) into the Hugging Face cache.
 fx cannot trace this model, so the steps come from fxtrace's hook path.
 """
-import base64
-import io
 import json
 import os
 import sys
@@ -20,6 +18,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+from figure import picture  # noqa: E402
 from fxtrace import nest, tensor, trace  # noqa: E402
 
 plt.rcParams.update({"font.sans-serif": ["WenQuanYi Micro Hei", "Noto Sans CJK SC", "Microsoft YaHei", "SimHei", "PingFang SC", "DejaVu Sans"], "axes.unicode_minus": False, "font.size": 9})
@@ -52,13 +51,6 @@ def G(name, kids, **kw):
     return {"name": name, "type": "模块", "children": kids, **kw}
 
 
-def png(fig, caption):
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=90, facecolor="white")
-    plt.close(fig)
-    return {"image": "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode(), "caption": caption}
-
-
 def fig_top():
     fig, ax = plt.subplots(figsize=(4.6, 2.2), constrained_layout=True)
     vals = top.values.tolist()
@@ -70,7 +62,7 @@ def fig_top():
     ax.set_xlim(0, max(vals) * 1.2)
     ax.set_xlabel("模型给的概率")
     ax.set_title(f"“{PROMPT}” 后面接什么？", fontsize=10)
-    return png(fig, f"词表里 {p.numel()} 个词中概率最高的 8 个。红色是正确答案。")
+    return picture(fig, f"词表里 {p.numel()} 个词中概率最高的 8 个。红色是正确答案。")
 
 
 after = [lens(raw[drop["id"]])] + [lens(raw[b["children"][-1]["id"]]) for b in blocks]  # after the embedding, then after each block
@@ -86,7 +78,7 @@ def fig_layers():
     ax.set_xticks(range(len(ys)), ["嵌入后"] + [f"第 {k} 层后" for k in range(1, len(ys))])
     ax.set_ylim(-0.03, max(ys) * 1.35 + 0.05)
     ax.set_ylabel(f"给“{right}”的概率")
-    return png(fig, "如果算到这一层就直接输出：红线是给正确答案的概率，点上面的字是那时模型会猜的词。")
+    return picture(fig, "如果算到这一层就直接输出：红线是给正确答案的概率，点上面的字是那时模型会猜的词。")
 
 
 def fig_attn():
@@ -97,7 +89,7 @@ def fig_attn():
     ax.set_yticks(range(T), words, fontsize=8)
     ax.set_xlabel("被看的位置")
     ax.set_ylabel("在看的位置")
-    return png(fig, f"第 {len(blocks)} 层的注意力（12 个头的平均）。每一行是一个位置在看谁；只能看自己和前面，所以右上角是空的。")
+    return picture(fig, f"第 {len(blocks)} 层的注意力（12 个头的平均）。每一行是一个位置在看谁；只能看自己和前面，所以右上角是空的。")
 
 
 TOP, LAYERS, ATTN = fig_top(), fig_layers(), fig_attn()

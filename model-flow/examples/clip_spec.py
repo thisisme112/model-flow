@@ -26,6 +26,7 @@ plt.rcParams.update({"font.sans-serif": ["WenQuanYi Micro Hei", "Noto Sans CJK S
 NAME = "openai/clip-vit-base-patch32"
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "scripts"))
+from figure import picture  # noqa: E402
 from fxtrace import nest, tensor, trace  # noqa: E402
 
 CAPTIONS = ["a photo of a cat", "a photo of a dog", "a photo of a couch"]  # each is 7 tokens, so nothing is padded and no mask is needed
@@ -77,14 +78,6 @@ with torch.no_grad():  # what the comparison would say if a tower stopped after 
 NORM = "每个位置的数各自调整到均值 0、方差 1 附近。"
 grid_attn = {}  # per vision layer: where the class position looks, as a 7x7 map over the image patches
 said_i, said_t = [], []  # the verdict if a tower stopped after each layer
-
-
-def png(fig, caption, kind="png"):
-    """A figure as a spec picture. A figure that contains a photo goes in as JPEG, or it weighs several hundred KB."""
-    buf = io.BytesIO()
-    fig.savefig(buf, format=kind, dpi=90, facecolor="white", **({"pil_kwargs": {"quality": 80}} if kind == "jpeg" else {}))
-    plt.close(fig)
-    return {"image": f"data:image/{kind};base64," + base64.b64encode(buf.getvalue()).decode(), "caption": caption}
 
 
 def layer(b, k, vision_side):
@@ -204,7 +197,7 @@ def fig_look():
         ax.set_title(title, fontsize=9)
         ax.axis("off")
     axes[1].imshow(a.numpy().repeat(32, 0).repeat(32, 1), cmap="Reds", alpha=0.6)
-    return png(fig, "左：每个小格是一个图块。右：颜色越红，class 位置从那一块取的信息越多（12 个头的平均）。", "jpeg")
+    return picture(fig, "左：每个小格是一个图块。右：颜色越红，class 位置从那一块取的信息越多（12 个头的平均）。", "jpeg")
 
 
 def fig_sim():
@@ -217,7 +210,7 @@ def fig_sim():
         ax.invert_yaxis()
         ax.set_xlim(0, max(vals) * 1.3)
         ax.set_title(title, fontsize=9)
-    return png(fig, f"三句话和图片的相似度差得很少；乘上温度 {scale:.0f} 再过 softmax，差距才拉开。红色是正确答案。")
+    return picture(fig, f"三句话和图片的相似度差得很少；乘上温度 {scale:.0f} 再过 softmax，差距才拉开。红色是正确答案。")
 
 
 def fig_layers():
@@ -230,7 +223,7 @@ def fig_layers():
     ax.set_xlabel("算到第几层")
     ax.set_ylabel(f"给“{SHORT[RIGHT]}”的概率")
     ax.legend(fontsize=8, frameon=False)
-    return png(fig, "一座塔提前停下、另一座照常算完时，模型给正确答案的概率。可以看出答案是在哪几层成形的。")
+    return picture(fig, "一座塔提前停下、另一座照常算完时，模型给正确答案的概率。可以看出答案是在哪几层成形的。")
 
 
 LOOK, SIM, LAYERS = fig_look(), fig_sim(), fig_layers()
