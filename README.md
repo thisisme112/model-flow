@@ -162,7 +162,6 @@ tree = nest(leaves, model)                       # 按模块调用分好组的�
 | `examples/` | 六个生成好的页面和它们的数据 |
 | `demo/` | 示例用到的项目源码和图片 |
 | `pack.py` | 打包成 `.skill` 文件 |
-| `CLAUDE.md` | 开发这个 skill 时给 Claude 看的笔记（含本机路径，使用时不需要） |
 
 ## 已知限制
 
